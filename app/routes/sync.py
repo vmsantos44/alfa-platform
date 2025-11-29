@@ -47,3 +47,33 @@ async def create_sample_data():
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create sample data: {str(e)}")
+
+
+@router.get("/debug-zoho")
+async def debug_zoho_data():
+    """
+    Debug endpoint to see raw Zoho CRM data for a few leads.
+    Shows what fields Zoho is actually returning.
+    """
+    from app.integrations.zoho.crm import ZohoCRM
+
+    try:
+        crm = ZohoCRM()
+        response = await crm.get_records(
+            module="Leads",
+            page=1,
+            per_page=5,
+            fields=[
+                "id", "First_Name", "Last_Name", "Email",
+                "Candidate_Status", "Tier_Level", "Language"
+            ]
+        )
+
+        records = response.get("data", [])
+        return {
+            "count": len(records),
+            "sample_records": records,
+            "info": response.get("info", {})
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
