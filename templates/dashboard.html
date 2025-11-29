@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Alfa Operations Platform{% endblock %}
+
+{% block nav_dashboard %}bg-gray-700{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}What needs your attention today{% endblock %}
+
+{% block content %}
+<div x-data="dashboardApp()" x-init="init()">
+
+    <!-- Loading State -->
+    <div x-show="loading" class="flex items-center justify-center h-64">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div x-show="!loading" x-cloak>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <!-- Needs Action -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 uppercase tracking-wide">Needs Action</p>
+                        <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.needs_action_count">0</p>
+                        <p class="text-sm text-red-600 mt-1">Requires follow-up</p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheduled Today -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 uppercase tracking-wide">Scheduled Today</p>
+                        <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.scheduled_today_count">0</p>
+                        <p class="text-sm text-yellow-600 mt-1">Interviews</p>
+                    </div>
+                    <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Interpreters -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 uppercase tracking-wide">Active Interpreters</p>
+                        <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.active_interpreters_count">0</p>
+                        <p class="text-sm text-green-600 mt-1">Ready for assignments</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Required Section -->
+        <div class="bg-white rounded-xl shadow-sm mb-6">
+            <div class="p-4 border-b flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <h2 class="text-lg font-semibold text-gray-800">ACTION REQUIRED</h2>
+                </div>
+                <button
+                    @click="refreshAlerts()"
+                    class="text-sm text-alfa-blue hover:underline"
+                >
+                    Refresh
+                </button>
+            </div>
+
+            <div class="p-4">
+                <!-- Empty State -->
+                <div x-show="alerts.length === 0" class="text-center py-8 text-gray-500">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p>No pending actions - you're all caught up!</p>
+                </div>
+
+                <!-- Alert List -->
+                <ul class="space-y-3" x-show="alerts.length > 0">
+                    <template x-for="alert in alerts" :key="alert.id">
+                        <li class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <!-- Priority Indicator -->
+                                <span
+                                    class="w-2 h-2 rounded-full"
+                                    :class="{
+                                        'bg-red-500': alert.priority === 'high',
+                                        'bg-yellow-500': alert.priority === 'medium',
+                                        'bg-blue-500': alert.priority === 'low'
+                                    }"
+                                ></span>
+
+                                <div>
+                                    <p class="font-medium text-gray-800" x-text="alert.title"></p>
+                                    <p class="text-sm text-gray-500" x-text="alert.description || 'No description'"></p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <!-- Alert Type Badge -->
+                                <span
+                                    class="text-xs px-2 py-1 rounded-full"
+                                    :class="{
+                                        'bg-red-100 text-red-700': alert.alert_type === 'no_show',
+                                        'bg-orange-100 text-orange-700': alert.alert_type === 'stuck_pipeline',
+                                        'bg-yellow-100 text-yellow-700': alert.alert_type === 'overdue_task',
+                                        'bg-blue-100 text-blue-700': alert.alert_type === 'unresponsive',
+                                        'bg-purple-100 text-purple-700': alert.alert_type === 'expired_document'
+                                    }"
+                                    x-text="formatAlertType(alert.alert_type)"
+                                ></span>
+
+                                <!-- Resolve Button -->
+                                <button
+                                    @click="resolveAlert(alert.id)"
+                                    class="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                                    title="Mark as resolved"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Today's Schedule -->
+            <div class="bg-white rounded-xl shadow-sm">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-800">TODAY'S SCHEDULE</h2>
+                    <a href="/scheduling" class="text-sm text-alfa-blue hover:underline">View Full Calendar</a>
+                </div>
+
+                <div class="p-4">
+                    <!-- Empty State -->
+                    <div x-show="schedule.length === 0" class="text-center py-8 text-gray-500">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p>No interviews scheduled today</p>
+                    </div>
+
+                    <!-- Schedule List -->
+                    <ul class="space-y-3" x-show="schedule.length > 0">
+                        <template x-for="interview in schedule" :key="interview.id">
+                            <li class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                                <div class="text-center min-w-[60px]">
+                                    <p class="text-lg font-bold text-alfa-blue" x-text="formatTime(interview.scheduled_date)"></p>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-gray-800" x-text="interview.candidate_name"></p>
+                                    <p class="text-sm text-gray-500" x-text="interview.interview_type"></p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button
+                                        class="p-2 text-gray-400 hover:text-alfa-blue hover:bg-blue-50 rounded"
+                                        title="View Details"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="markNoShow(interview.id)"
+                                        class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                        title="Mark No-Show"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Pipeline Overview -->
+            <div class="bg-white rounded-xl shadow-sm">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-800">PIPELINE OVERVIEW</h2>
+                    <a href="/candidates" class="text-sm text-alfa-blue hover:underline">View All</a>
+                </div>
+
+                <div class="p-4">
+                    <div class="space-y-3">
+                        <template x-for="stage in pipeline" :key="stage.stage">
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm text-gray-600 w-32 truncate" x-text="stage.stage"></span>
+                                <div class="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                                    <div
+                                        class="h-full rounded-full transition-all duration-500"
+                                        :class="getPipelineColor(stage.stage)"
+                                        :style="'width: ' + Math.min((stage.count / maxPipelineCount) * 100, 100) + '%'"
+                                    ></div>
+                                </div>
+                                <span class="text-sm font-medium text-gray-800 w-12 text-right" x-text="stage.count"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mt-6 flex flex-wrap gap-3">
+            <a href="/candidates?search=" class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span>Search Candidate</span>
+            </a>
+
+            <button class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <span>Schedule Interview</span>
+            </button>
+
+            <button class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                <span>Send Reminder</span>
+            </button>
+
+            <a href="/chat" class="inline-flex items-center gap-2 px-4 py-2 bg-alfa-blue text-white rounded-lg shadow-sm hover:bg-blue-700 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <span>Open Chat</span>
+            </a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function dashboardApp() {
+    return {
+        loading: true,
+        stats: {
+            needs_action_count: 0,
+            scheduled_today_count: 0,
+            active_interpreters_count: 0,
+            total_candidates: 0,
+            new_leads: 0,
+            screening: 0,
+            interview: 0,
+            assessment: 0,
+            onboarding: 0,
+            active: 0
+        },
+        alerts: [],
+        schedule: [],
+        pipeline: [],
+        maxPipelineCount: 1,
+
+        async init() {
+            await this.fetchDashboard();
+            this.loading = false;
+        },
+
+        async fetchDashboard() {
+            try {
+                const response = await fetch('/api/dashboard/');
+                const data = await response.json();
+
+                this.stats = data.stats;
+                this.alerts = data.action_alerts;
+                this.schedule = data.today_schedule.interviews;
+                this.pipeline = data.pipeline;
+
+                // Calculate max for pipeline bars
+                this.maxPipelineCount = Math.max(...this.pipeline.map(s => s.count), 1);
+
+            } catch (error) {
+                console.error('Failed to fetch dashboard:', error);
+            }
+        },
+
+        async refreshAlerts() {
+            try {
+                const response = await fetch('/api/dashboard/alerts');
+                this.alerts = await response.json();
+            } catch (error) {
+                console.error('Failed to refresh alerts:', error);
+            }
+        },
+
+        async resolveAlert(alertId) {
+            try {
+                const response = await fetch(`/api/dashboard/alerts/${alertId}/resolve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resolved_by: 'Victor' })
+                });
+
+                if (response.ok) {
+                    this.alerts = this.alerts.filter(a => a.id !== alertId);
+                    this.stats.needs_action_count--;
+                }
+            } catch (error) {
+                console.error('Failed to resolve alert:', error);
+            }
+        },
+
+        async markNoShow(interviewId) {
+            if (!confirm('Mark this interview as a no-show?')) return;
+
+            try {
+                // This will be implemented with the scheduling API
+                console.log('Mark no-show:', interviewId);
+                alert('No-show marked (API coming soon)');
+            } catch (error) {
+                console.error('Failed to mark no-show:', error);
+            }
+        },
+
+        formatTime(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        },
+
+        formatAlertType(type) {
+            const types = {
+                'no_show': 'No Show',
+                'stuck_pipeline': 'Stuck',
+                'overdue_task': 'Overdue',
+                'expired_document': 'Expired Doc',
+                'unresponsive': 'Unresponsive',
+                'pending_followup': 'Follow-up'
+            };
+            return types[type] || type;
+        },
+
+        getPipelineColor(stage) {
+            const colors = {
+                'New Lead': 'bg-blue-400',
+                'Screening': 'bg-yellow-400',
+                'Interview Scheduled': 'bg-orange-400',
+                'Interview Completed': 'bg-purple-400',
+                'Assessment': 'bg-pink-400',
+                'Onboarding': 'bg-indigo-400',
+                'Active': 'bg-green-500'
+            };
+            return colors[stage] || 'bg-gray-400';
+        }
+    };
+}
+</script>
+{% endblock %}

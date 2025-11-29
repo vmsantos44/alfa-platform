@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}Candidates - Alfa Operations Platform{% endblock %}
+
+{% block nav_candidates %}bg-gray-700{% endblock %}
+
+{% block page_title %}Candidate Pipeline{% endblock %}
+{% block page_subtitle %}Track candidates through recruitment stages{% endblock %}
+
+{% block content %}
+<div x-data="candidatesApp()" x-init="init()">
+
+    <!-- Filters Bar -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+        <div class="flex flex-wrap items-center gap-4">
+            <!-- Search -->
+            <div class="flex-1 min-w-[200px]">
+                <div class="relative">
+                    <input
+                        type="text"
+                        x-model="filters.search"
+                        @input.debounce.300ms="fetchCandidates()"
+                        placeholder="Search by name or email..."
+                        class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                    >
+                    <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Stage Filter -->
+            <select
+                x-model="filters.stage"
+                @change="fetchCandidates()"
+                class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+            >
+                <option value="">All Stages</option>
+                <option value="New Lead">New Lead</option>
+                <option value="Screening">Screening</option>
+                <option value="Interview Scheduled">Interview Scheduled</option>
+                <option value="Interview Completed">Interview Completed</option>
+                <option value="Assessment">Assessment</option>
+                <option value="Onboarding">Onboarding</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Rejected">Rejected</option>
+            </select>
+
+            <!-- Filter Toggles -->
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                    type="checkbox"
+                    x-model="filters.unresponsive"
+                    @change="fetchCandidates()"
+                    class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                >
+                <span class="text-sm text-gray-600">Unresponsive only</span>
+            </label>
+
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                    type="checkbox"
+                    x-model="filters.pendingDocs"
+                    @change="fetchCandidates()"
+                    class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                >
+                <span class="text-sm text-gray-600">Pending docs</span>
+            </label>
+
+            <!-- View Toggle -->
+            <div class="flex border rounded-lg overflow-hidden">
+                <button
+                    @click="viewMode = 'pipeline'"
+                    :class="viewMode === 'pipeline' ? 'bg-alfa-blue text-white' : 'bg-white text-gray-600'"
+                    class="px-4 py-2 text-sm font-medium transition-colors"
+                >
+                    Pipeline
+                </button>
+                <button
+                    @click="viewMode = 'list'"
+                    :class="viewMode === 'list' ? 'bg-alfa-blue text-white' : 'bg-white text-gray-600'"
+                    class="px-4 py-2 text-sm font-medium transition-colors"
+                >
+                    List
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div x-show="loading" class="flex items-center justify-center h-64">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Pipeline View (Kanban) -->
+    <div x-show="!loading && viewMode === 'pipeline'" x-cloak class="overflow-x-auto pb-4">
+        <div class="flex gap-4 min-w-max">
+            <template x-for="stage in pipeline" :key="stage.stage">
+                <div class="w-72 flex-shrink-0">
+                    <!-- Stage Header -->
+                    <div
+                        class="rounded-t-lg p-3 flex items-center justify-between"
+                        :class="getStageHeaderColor(stage.stage)"
+                    >
+                        <span class="font-semibold text-white" x-text="stage.stage"></span>
+                        <span class="bg-white/20 text-white px-2 py-0.5 rounded-full text-sm" x-text="stage.count"></span>
+                    </div>
+
+                    <!-- Stage Cards -->
+                    <div class="bg-gray-100 rounded-b-lg p-2 min-h-[400px] space-y-2">
+                        <template x-for="candidate in stage.candidates" :key="candidate.id">
+                            <div
+                                class="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                @click="openCandidateDetail(candidate)"
+                            >
+                                <div class="flex items-start justify-between mb-2">
+                                    <span class="font-medium text-gray-800" x-text="candidate.full_name"></span>
+                                    <div class="flex gap-1">
+                                        <span
+                                            x-show="candidate.is_unresponsive"
+                                            class="w-2 h-2 bg-red-500 rounded-full"
+                                            title="Unresponsive"
+                                        ></span>
+                                        <span
+                                            x-show="candidate.has_pending_documents"
+                                            class="w-2 h-2 bg-yellow-500 rounded-full"
+                                            title="Pending Documents"
+                                        ></span>
+                                    </div>
+                                </div>
+
+                                <div class="text-xs text-gray-500">
+                                    <span x-text="candidate.days_in_stage + ' days in stage'"></span>
+                                </div>
+
+                                <!-- Quick Actions -->
+                                <div class="flex gap-1 mt-2 pt-2 border-t" @click.stop>
+                                    <button
+                                        @click="moveToPrevStage(candidate)"
+                                        class="p-1 text-gray-400 hover:text-alfa-blue hover:bg-blue-50 rounded"
+                                        title="Move to previous stage"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="moveToNextStage(candidate)"
+                                        class="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                                        title="Move to next stage"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="toggleUnresponsive(candidate)"
+                                        class="p-1 rounded"
+                                        :class="candidate.is_unresponsive ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'"
+                                        title="Toggle unresponsive"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <div
+                            x-show="stage.candidates.length === 0"
+                            class="text-center py-8 text-gray-400"
+                        >
+                            <p class="text-sm">No candidates</p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- List View -->
+    <div x-show="!loading && viewMode === 'list'" x-cloak class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-50 border-b">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+                <template x-for="candidate in candidates" :key="candidate.id">
+                    <tr class="hover:bg-gray-50 cursor-pointer" @click="openCandidateDetail(candidate)">
+                        <td class="px-4 py-3">
+                            <span class="font-medium text-gray-800" x-text="candidate.full_name"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span
+                                class="px-2 py-1 text-xs rounded-full"
+                                :class="getStageBadgeColor(candidate.stage)"
+                                x-text="candidate.stage"
+                            ></span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500" x-text="candidate.days_in_stage + ' days'"></td>
+                        <td class="px-4 py-3 text-sm text-gray-500" x-text="candidate.email || '-'"></td>
+                        <td class="px-4 py-3">
+                            <div class="flex gap-1">
+                                <span
+                                    x-show="candidate.is_unresponsive"
+                                    class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full"
+                                >Unresponsive</span>
+                                <span
+                                    x-show="candidate.has_pending_documents"
+                                    class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full"
+                                >Pending Docs</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3" @click.stop>
+                            <div class="flex gap-1">
+                                <a
+                                    :href="candidate.zoho_url"
+                                    target="_blank"
+                                    class="p-1 text-gray-400 hover:text-alfa-blue hover:bg-blue-50 rounded"
+                                    title="View in Zoho CRM"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                    </svg>
+                                </a>
+                                <button
+                                    @click="toggleUnresponsive(candidate)"
+                                    class="p-1 rounded"
+                                    :class="candidate.is_unresponsive ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500'"
+                                    title="Toggle unresponsive"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+
+                <!-- Empty State -->
+                <tr x-show="candidates.length === 0">
+                    <td colspan="6" class="px-4 py-12 text-center text-gray-500">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p>No candidates found</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Candidate Detail Modal -->
+    <div
+        x-show="selectedCandidate"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="selectedCandidate = null"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <!-- Backdrop -->
+            <div
+                class="fixed inset-0 bg-black/50 transition-opacity"
+                @click="selectedCandidate = null"
+            ></div>
+
+            <!-- Modal -->
+            <div class="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <!-- Header -->
+                    <div class="flex items-start justify-between mb-6">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-800" x-text="selectedCandidate?.full_name"></h2>
+                            <p class="text-sm text-gray-500" x-text="selectedCandidate?.email"></p>
+                        </div>
+                        <button
+                            @click="selectedCandidate = null"
+                            class="p-1 text-gray-400 hover:text-gray-600"
+                        >
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Info Grid -->
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Stage</p>
+                            <p class="font-medium" x-text="selectedCandidate?.stage"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Days in Stage</p>
+                            <p class="font-medium" x-text="selectedCandidate?.days_in_stage"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Phone</p>
+                            <p class="font-medium" x-text="selectedCandidate?.phone || '-'"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Languages</p>
+                            <p class="font-medium" x-text="selectedCandidate?.languages || '-'"></p>
+                        </div>
+                    </div>
+
+                    <!-- Move Stage -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Move to Stage</label>
+                        <select
+                            x-model="newStage"
+                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                        >
+                            <option value="">Select new stage...</option>
+                            <option value="New Lead">New Lead</option>
+                            <option value="Screening">Screening</option>
+                            <option value="Interview Scheduled">Interview Scheduled</option>
+                            <option value="Interview Completed">Interview Completed</option>
+                            <option value="Assessment">Assessment</option>
+                            <option value="Onboarding">Onboarding</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex gap-3">
+                        <button
+                            @click="moveStage()"
+                            :disabled="!newStage"
+                            class="flex-1 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Update Stage
+                        </button>
+                        <a
+                            :href="selectedCandidate?.zoho_url"
+                            target="_blank"
+                            class="px-4 py-2 border rounded-lg hover:bg-gray-50 inline-flex items-center gap-2"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                            </svg>
+                            Open in Zoho
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function candidatesApp() {
+    return {
+        loading: true,
+        viewMode: 'pipeline',
+        candidates: [],
+        pipeline: [],
+        selectedCandidate: null,
+        newStage: '',
+        filters: {
+            search: '',
+            stage: '',
+            unresponsive: false,
+            pendingDocs: false
+        },
+        stages: [
+            'New Lead',
+            'Screening',
+            'Interview Scheduled',
+            'Interview Completed',
+            'Assessment',
+            'Onboarding',
+            'Active'
+        ],
+
+        async init() {
+            await this.fetchPipeline();
+            await this.fetchCandidates();
+            this.loading = false;
+        },
+
+        async fetchPipeline() {
+            try {
+                const response = await fetch('/api/candidates/pipeline?include_candidates=true');
+                this.pipeline = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch pipeline:', error);
+            }
+        },
+
+        async fetchCandidates() {
+            try {
+                const params = new URLSearchParams();
+                if (this.filters.search) params.append('search', this.filters.search);
+                if (this.filters.stage) params.append('stage', this.filters.stage);
+                if (this.filters.unresponsive) params.append('unresponsive', 'true');
+                if (this.filters.pendingDocs) params.append('pending_docs', 'true');
+
+                const response = await fetch(`/api/candidates/?${params}`);
+                this.candidates = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch candidates:', error);
+            }
+        },
+
+        openCandidateDetail(candidate) {
+            this.selectedCandidate = candidate;
+            this.newStage = '';
+        },
+
+        async moveStage() {
+            if (!this.newStage || !this.selectedCandidate) return;
+
+            try {
+                const response = await fetch(
+                    `/api/candidates/${this.selectedCandidate.id}/move-stage?new_stage=${encodeURIComponent(this.newStage)}`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    this.selectedCandidate.stage = this.newStage;
+                    this.selectedCandidate.days_in_stage = 0;
+                    await this.fetchPipeline();
+                    await this.fetchCandidates();
+                    this.selectedCandidate = null;
+                }
+            } catch (error) {
+                console.error('Failed to move stage:', error);
+            }
+        },
+
+        async toggleUnresponsive(candidate) {
+            try {
+                const newValue = !candidate.is_unresponsive;
+                const response = await fetch(
+                    `/api/candidates/${candidate.id}/flag-unresponsive?unresponsive=${newValue}`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    candidate.is_unresponsive = newValue;
+                }
+            } catch (error) {
+                console.error('Failed to toggle unresponsive:', error);
+            }
+        },
+
+        async moveToNextStage(candidate) {
+            const currentIndex = this.stages.indexOf(candidate.stage);
+            if (currentIndex < this.stages.length - 1) {
+                const nextStage = this.stages[currentIndex + 1];
+                try {
+                    const response = await fetch(
+                        `/api/candidates/${candidate.id}/move-stage?new_stage=${encodeURIComponent(nextStage)}`,
+                        { method: 'POST' }
+                    );
+                    if (response.ok) {
+                        await this.fetchPipeline();
+                    }
+                } catch (error) {
+                    console.error('Failed to move stage:', error);
+                }
+            }
+        },
+
+        async moveToPrevStage(candidate) {
+            const currentIndex = this.stages.indexOf(candidate.stage);
+            if (currentIndex > 0) {
+                const prevStage = this.stages[currentIndex - 1];
+                try {
+                    const response = await fetch(
+                        `/api/candidates/${candidate.id}/move-stage?new_stage=${encodeURIComponent(prevStage)}`,
+                        { method: 'POST' }
+                    );
+                    if (response.ok) {
+                        await this.fetchPipeline();
+                    }
+                } catch (error) {
+                    console.error('Failed to move stage:', error);
+                }
+            }
+        },
+
+        getStageHeaderColor(stage) {
+            const colors = {
+                'New Lead': 'bg-blue-500',
+                'Screening': 'bg-yellow-500',
+                'Interview Scheduled': 'bg-orange-500',
+                'Interview Completed': 'bg-purple-500',
+                'Assessment': 'bg-pink-500',
+                'Onboarding': 'bg-indigo-500',
+                'Active': 'bg-green-500',
+                'Inactive': 'bg-gray-500',
+                'Rejected': 'bg-red-500'
+            };
+            return colors[stage] || 'bg-gray-500';
+        },
+
+        getStageBadgeColor(stage) {
+            const colors = {
+                'New Lead': 'bg-blue-100 text-blue-700',
+                'Screening': 'bg-yellow-100 text-yellow-700',
+                'Interview Scheduled': 'bg-orange-100 text-orange-700',
+                'Interview Completed': 'bg-purple-100 text-purple-700',
+                'Assessment': 'bg-pink-100 text-pink-700',
+                'Onboarding': 'bg-indigo-100 text-indigo-700',
+                'Active': 'bg-green-100 text-green-700',
+                'Inactive': 'bg-gray-100 text-gray-700',
+                'Rejected': 'bg-red-100 text-red-700'
+            };
+            return colors[stage] || 'bg-gray-100 text-gray-700';
+        }
+    };
+}
+</script>
+{% endblock %}
