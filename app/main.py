@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from app.config import HOST, PORT, DEBUG
 from app.core.database import init_db
-from app.routes import chat, api, webhooks, dashboard, candidates, sync
+from app.routes import chat, api, webhooks, dashboard, candidates, sync, interviews
 
 # Template directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -62,6 +62,7 @@ app.add_middleware(
 # Include API routers
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(candidates.router, prefix="/api/candidates", tags=["Candidates"])
+app.include_router(interviews.router, prefix="/api/interviews", tags=["Interviews"])
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(api.router, prefix="/api", tags=["API"])
