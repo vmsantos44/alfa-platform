@@ -9,9 +9,10 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     """Application settings"""
-    
+
+    # Use absolute path for .env file (works regardless of working directory)
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).resolve().parent.parent / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False
     )
