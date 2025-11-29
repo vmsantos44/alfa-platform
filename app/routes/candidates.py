@@ -85,6 +85,88 @@ async def get_pipeline(
 
 
 # ============================================
+# Bulk Operations (MUST be before /{candidate_id} route)
+# ============================================
+
+@router.get("/stuck", response_model=List[CandidateResponse])
+async def get_stuck_candidates(
+    days: int = Query(7, description="Days in stage threshold"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get candidates stuck in a stage for X+ days"""
+    result = await db.execute(
+        select(CandidateCache)
+        .where(
+            and_(
+                CandidateCache.days_in_stage >= days,
+                CandidateCache.stage.in_(["Screening", "Interview Scheduled", "Assessment", "Onboarding"])
+            )
+        )
+        .order_by(CandidateCache.days_in_stage.desc())
+    )
+    candidates = result.scalars().all()
+
+    return [
+        CandidateResponse(
+            id=c.id,
+            zoho_id=c.zoho_id,
+            zoho_module=c.zoho_module,
+            full_name=c.full_name,
+            email=c.email,
+            phone=c.phone,
+            stage=c.stage,
+            assigned_client=c.assigned_client,
+            tier=c.tier,
+            languages=c.languages,
+            last_activity_date=c.last_activity_date,
+            last_communication_date=c.last_communication_date,
+            days_in_stage=c.days_in_stage,
+            is_unresponsive=c.is_unresponsive,
+            has_pending_documents=c.has_pending_documents,
+            needs_training=c.needs_training,
+            zoho_url=get_crm_record_url(c.zoho_module, c.zoho_id)
+        )
+        for c in candidates
+    ]
+
+
+@router.get("/unresponsive", response_model=List[CandidateResponse])
+async def get_unresponsive_candidates(
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all unresponsive candidates"""
+    result = await db.execute(
+        select(CandidateCache)
+        .where(CandidateCache.is_unresponsive == True)
+        .order_by(CandidateCache.last_communication_date)
+    )
+    candidates = result.scalars().all()
+
+    return [
+        CandidateResponse(
+            id=c.id,
+            zoho_id=c.zoho_id,
+            zoho_module=c.zoho_module,
+            full_name=c.full_name,
+            email=c.email,
+            phone=c.phone,
+            stage=c.stage,
+            assigned_client=c.assigned_client,
+            tier=c.tier,
+            languages=c.languages,
+            last_activity_date=c.last_activity_date,
+            last_communication_date=c.last_communication_date,
+            days_in_stage=c.days_in_stage,
+            is_unresponsive=c.is_unresponsive,
+            has_pending_documents=c.has_pending_documents,
+            needs_training=c.needs_training,
+            zoho_url=get_crm_record_url(c.zoho_module, c.zoho_id)
+        )
+        for c in candidates
+    ]
+
+
+# ============================================
 # Candidate CRUD
 # ============================================
 
@@ -330,85 +412,3 @@ async def flag_pending_documents(
 
     status = "flagged with pending documents" if pending else "documents cleared"
     return SuccessResponse(message=f"Candidate {status}")
-
-
-# ============================================
-# Bulk Operations
-# ============================================
-
-@router.get("/stuck", response_model=List[CandidateResponse])
-async def get_stuck_candidates(
-    days: int = Query(7, description="Days in stage threshold"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get candidates stuck in a stage for X+ days"""
-    result = await db.execute(
-        select(CandidateCache)
-        .where(
-            and_(
-                CandidateCache.days_in_stage >= days,
-                CandidateCache.stage.in_(["Screening", "Interview Scheduled", "Assessment", "Onboarding"])
-            )
-        )
-        .order_by(CandidateCache.days_in_stage.desc())
-    )
-    candidates = result.scalars().all()
-
-    return [
-        CandidateResponse(
-            id=c.id,
-            zoho_id=c.zoho_id,
-            zoho_module=c.zoho_module,
-            full_name=c.full_name,
-            email=c.email,
-            phone=c.phone,
-            stage=c.stage,
-            assigned_client=c.assigned_client,
-            tier=c.tier,
-            languages=c.languages,
-            last_activity_date=c.last_activity_date,
-            last_communication_date=c.last_communication_date,
-            days_in_stage=c.days_in_stage,
-            is_unresponsive=c.is_unresponsive,
-            has_pending_documents=c.has_pending_documents,
-            needs_training=c.needs_training,
-            zoho_url=get_crm_record_url(c.zoho_module, c.zoho_id)
-        )
-        for c in candidates
-    ]
-
-
-@router.get("/unresponsive", response_model=List[CandidateResponse])
-async def get_unresponsive_candidates(
-    db: AsyncSession = Depends(get_db)
-):
-    """Get all unresponsive candidates"""
-    result = await db.execute(
-        select(CandidateCache)
-        .where(CandidateCache.is_unresponsive == True)
-        .order_by(CandidateCache.last_communication_date)
-    )
-    candidates = result.scalars().all()
-
-    return [
-        CandidateResponse(
-            id=c.id,
-            zoho_id=c.zoho_id,
-            zoho_module=c.zoho_module,
-            full_name=c.full_name,
-            email=c.email,
-            phone=c.phone,
-            stage=c.stage,
-            assigned_client=c.assigned_client,
-            tier=c.tier,
-            languages=c.languages,
-            last_activity_date=c.last_activity_date,
-            last_communication_date=c.last_communication_date,
-            days_in_stage=c.days_in_stage,
-            is_unresponsive=c.is_unresponsive,
-            has_pending_documents=c.has_pending_documents,
-            needs_training=c.needs_training,
-            zoho_url=get_crm_record_url(c.zoho_module, c.zoho_id)
-        )
-        for c in candidates
-    ]
