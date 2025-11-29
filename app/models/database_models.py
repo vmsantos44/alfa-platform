@@ -49,20 +49,58 @@ class CandidateCache(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     zoho_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    zoho_module: Mapped[str] = mapped_column(String(20), default="Contacts")
+    zoho_module: Mapped[str] = mapped_column(String(20), default="Leads")
 
     # Basic info
+    first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     full_name: Mapped[str] = mapped_column(String(200))
     email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    mobile: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    whatsapp_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    # Pipeline info
-    stage: Mapped[str] = mapped_column(String(50), default="New Lead", index=True)
+    # Location
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    service_location: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # On-shore/Off-shore
+
+    # Pipeline info from CRM
+    candidate_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # Raw Zoho status
+    stage: Mapped[str] = mapped_column(String(50), default="New Lead", index=True)  # Mapped pipeline stage
+    tier: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Tier 1, Tier 2, Tier 3
+
+    # Languages
+    language: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Primary language
+    languages: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # All languages
+
+    # Assignment
+    candidate_owner: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    recruitment_owner: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     assigned_client: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    tier: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    agreed_rate: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    # Languages (stored as comma-separated)
-    languages: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Assessment tracking
+    language_assessment_passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    language_assessment_grader: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    language_assessment_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    bgv_passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # Background check
+    system_specs_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    # Offer & Training
+    offer_accepted: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    offer_accepted_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    training_accepted: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    training_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    training_start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    training_end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    alfa_one_onboarded: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    # Follow-up tracking
+    next_followup: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    followup_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    recontact_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Activity tracking
     last_activity_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -74,11 +112,16 @@ class CandidateCache(Base):
     is_unresponsive: Mapped[bool] = mapped_column(Boolean, default=False)
     has_pending_documents: Mapped[bool] = mapped_column(Boolean, default=False)
     needs_training: Mapped[bool] = mapped_column(Boolean, default=False)
+    disqualification_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    # Source
+    candidate_source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Sync metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_synced: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    zoho_modified_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self):
         return f"<Candidate {self.full_name} ({self.stage})>"

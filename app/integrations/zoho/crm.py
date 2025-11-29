@@ -103,6 +103,65 @@ class ZohoAPI:
         return {"Authorization": f"Zoho-oauthtoken {token}"}
 
     @api_retry
+    async def get_records(
+        self,
+        module: str,
+        page: int = 1,
+        per_page: int = 200,
+        fields: Optional[List[str]] = None,
+        criteria: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get records from a Zoho CRM module with pagination.
+
+        Args:
+            module: CRM module name (Leads, Contacts, etc.)
+            page: Page number (starts at 1)
+            per_page: Records per page (max 200)
+            fields: Optional list of field names to retrieve
+            criteria: Optional COQL criteria string
+
+        Returns:
+            Dict with 'data' list and 'info' pagination details
+        """
+        headers = await self._get_headers()
+
+        params = {
+            "page": page,
+            "per_page": min(per_page, 200)
+        }
+
+        if fields:
+            params["fields"] = ",".join(fields)
+
+        try:
+            if criteria:
+                # Use search API with criteria
+                response = await self.client.get(
+                    f"{self.settings.zoho_api_domain}/crm/v2/{module}/search",
+                    headers=headers,
+                    params={"criteria": criteria, **params},
+                )
+            else:
+                # Use regular get records API
+                response = await self.client.get(
+                    f"{self.settings.zoho_api_domain}/crm/v2/{module}",
+                    headers=headers,
+                    params=params,
+                )
+
+            # Handle 204 No Content (no records)
+            if response.status_code == 204:
+                return {"data": [], "info": {"more_records": False}}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, 'response') and e.response and e.response.status_code == 204:
+                return {"data": [], "info": {"more_records": False}}
+            raise Exception(f"Failed to get records from {module}: {str(e)}")
+
+    @api_retry
     async def search_contacts(self, search_term: str) -> Dict[str, Any]:
         """Search for contacts by name or email"""
         headers = await self._get_headers()
@@ -1195,12 +1254,12 @@ async def lookup_candidate(search_term: str) -> dict:
 async def workdrive_search(query: str, parent_id: Optional[str] = None, limit: int = 20) -> dict:
     """
     Search Zoho WorkDrive for documents.
-    
+
     Args:
         query: Search keyword
         parent_id: Optional folder ID to scope search
         limit: Maximum results (1-200)
-    
+
     Returns:
         dict with search results
     """
@@ -1208,7 +1267,7 @@ async def workdrive_search(query: str, parent_id: Optional[str] = None, limit: i
     params = {"query": query, "limit": min(limit, 200)}
     if parent_id:
         params["parentId"] = parent_id
-    
+
     try:
         response = await client.get("/api/workdrive-search", params=params)
         response.raise_for_status()
@@ -1218,3 +1277,11 @@ async def workdrive_search(query: str, parent_id: Optional[str] = None, limit: i
             "success": False,
             "error": f"CRM API error: {str(e)}"
         }
+
+
+# ============================================================================
+# ALIAS FOR BACKWARD COMPATIBILITY
+# ============================================================================
+
+# ZohoCRM is an alias for ZohoAPI (used by sync service)
+ZohoCRM = ZohoAPI
