@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Alfa Operations Platform{% endblock %}
+
+{% block nav_settings %}bg-gray-700{% endblock %}
+
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Platform configuration{% endblock %}
+
+{% block content %}
+<div x-data="settingsApp()">
+
+    <!-- Sync Section -->
+    <div class="bg-white rounded-xl shadow-sm mb-6">
+        <div class="p-4 border-b">
+            <h2 class="text-lg font-semibold text-gray-800">Data Synchronization</h2>
+            <p class="text-sm text-gray-500">Sync candidate data from Zoho CRM</p>
+        </div>
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="font-medium text-gray-800">Last Sync</p>
+                    <p class="text-sm text-gray-500" x-text="lastSync || 'Never'"></p>
+                </div>
+                <button
+                    @click="syncData()"
+                    :disabled="syncing"
+                    class="px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                    <svg x-show="syncing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span x-text="syncing ? 'Syncing...' : 'Sync Now'"></span>
+                </button>
+            </div>
+
+            <div x-show="syncMessage" class="p-3 rounded-lg" :class="syncSuccess ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
+                <p x-text="syncMessage"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Status -->
+    <div class="bg-white rounded-xl shadow-sm mb-6">
+        <div class="p-4 border-b">
+            <h2 class="text-lg font-semibold text-gray-800">API Status</h2>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-3 h-3 rounded-full mx-auto mb-2" :class="apiStatus.platform ? 'bg-green-500' : 'bg-red-500'"></div>
+                    <p class="text-sm font-medium">Platform API</p>
+                </div>
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-3 h-3 rounded-full mx-auto mb-2" :class="apiStatus.zoho ? 'bg-green-500' : 'bg-yellow-500'"></div>
+                    <p class="text-sm font-medium">Zoho CRM</p>
+                </div>
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-3 h-3 rounded-full mx-auto mb-2 bg-gray-300"></div>
+                    <p class="text-sm font-medium">Zoho Books</p>
+                </div>
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-3 h-3 rounded-full mx-auto mb-2 bg-gray-300"></div>
+                    <p class="text-sm font-medium">MS Teams</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About -->
+    <div class="bg-white rounded-xl shadow-sm">
+        <div class="p-4 border-b">
+            <h2 class="text-lg font-semibold text-gray-800">About</h2>
+        </div>
+        <div class="p-6">
+            <div class="space-y-2 text-sm text-gray-600">
+                <p><span class="font-medium">Version:</span> 2.0.0</p>
+                <p><span class="font-medium">Platform:</span> Alfa Operations Platform</p>
+                <p><span class="font-medium">Organization:</span> Alfa Systems</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function settingsApp() {
+    return {
+        syncing: false,
+        syncMessage: '',
+        syncSuccess: false,
+        lastSync: null,
+        apiStatus: {
+            platform: true,
+            zoho: false
+        },
+
+        async init() {
+            await this.checkApiStatus();
+        },
+
+        async checkApiStatus() {
+            try {
+                const response = await fetch('/health');
+                this.apiStatus.platform = response.ok;
+            } catch {
+                this.apiStatus.platform = false;
+            }
+        },
+
+        async syncData() {
+            this.syncing = true;
+            this.syncMessage = '';
+
+            try {
+                const response = await fetch('/api/sync/candidates', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.syncSuccess = true;
+                    this.syncMessage = `Sync complete! ${data.records_processed || 0} records processed.`;
+                    this.lastSync = new Date().toLocaleString();
+                } else {
+                    this.syncSuccess = false;
+                    this.syncMessage = data.detail || 'Sync failed';
+                }
+            } catch (error) {
+                this.syncSuccess = false;
+                this.syncMessage = 'Failed to connect to server';
+            }
+
+            this.syncing = false;
+        }
+    };
+}
+</script>
+{% endblock %}
