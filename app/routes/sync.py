@@ -10,15 +10,13 @@ router = APIRouter()
 
 
 @router.post("/candidates")
-async def sync_candidates(force: bool = False):
+async def sync_candidates():
     """
-    Sync candidates from Zoho CRM to local database.
-
-    Args:
-        force: If True, sync all candidates regardless of last sync time
+    Sync candidates from Zoho CRM Leads module to local database.
+    Maps Zoho CRM fields to local pipeline stages.
     """
     try:
-        stats = await SyncService.sync_candidates(force=force)
+        stats = await SyncService.sync_candidates_from_zoho()
         return {
             "success": True,
             "message": "Sync completed",
