@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Use absolute path for .env file (works regardless of working directory)
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parent.parent / ".env",
+        env_file=str(Path(__file__).resolve().parent.parent / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False
     )
