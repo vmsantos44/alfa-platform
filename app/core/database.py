@@ -33,6 +33,9 @@ async_session = async_sessionmaker(
 
 async def init_db():
     """Initialize database and create all tables"""
+    # Import models to register them with Base.metadata
+    from app.models import database_models  # noqa: F401
+
     # Ensure data directory exists
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
