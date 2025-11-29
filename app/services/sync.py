@@ -269,18 +269,30 @@ class SyncService:
                 return value.lower() in ("true", "yes", "1")
             return bool(value)
 
+        def to_string(value):
+            """Convert value to string, handling lists and dicts"""
+            if value is None:
+                return None
+            if isinstance(value, list):
+                # Join list items with semicolon
+                return "; ".join(str(v) for v in value if v)
+            if isinstance(value, dict):
+                # Get 'name' key if exists, else first string value
+                return value.get("name") or value.get("id") or str(value)
+            return str(value) if value else None
+
         # Build full name
-        first_name = data.get("First_Name", "")
-        last_name = data.get("Last_Name", "")
+        first_name = to_string(data.get("First_Name")) or ""
+        last_name = to_string(data.get("Last_Name")) or ""
         full_name = f"{first_name} {last_name}".strip() or "Unknown"
 
         # Get candidate status and map to stage
-        candidate_status = data.get("Candidate_Status", "")
+        candidate_status = to_string(data.get("Candidate_Status")) or ""
         stage = cls.map_status_to_stage(candidate_status)
 
         # Build languages string
-        primary_lang = data.get("Language", "")
-        other_langs = data.get("Other_spoken_language_s", "")
+        primary_lang = to_string(data.get("Language")) or ""
+        other_langs = to_string(data.get("Other_spoken_language_s")) or ""
         languages = primary_lang
         if other_langs:
             languages = f"{primary_lang}; {other_langs}" if primary_lang else other_langs
@@ -326,9 +338,9 @@ class SyncService:
             existing.languages = languages
 
             existing.candidate_owner = candidate_owner
-            existing.recruitment_owner = recruitment_owner
-            existing.assigned_client = data.get("Client")
-            existing.agreed_rate = data.get("Agreed_Rate")
+            existing.recruitment_owner = to_string(recruitment_owner)
+            existing.assigned_client = to_string(data.get("Client"))
+            existing.agreed_rate = to_string(data.get("Agreed_Rate"))
 
             existing.language_assessment_passed = parse_bool(data.get("Language_Assesment_Pased"))
             existing.language_assessment_grader = data.get("Language_Assessment_Grader")
@@ -381,25 +393,25 @@ class SyncService:
                 mobile=data.get("Mobile"),
                 whatsapp_number=data.get("WhatsApp_Number"),
 
-                city=data.get("City"),
-                state=data.get("State"),
-                country=data.get("Country"),
-                service_location=data.get("Service_Location"),
+                city=to_string(data.get("City")),
+                state=to_string(data.get("State")),
+                country=to_string(data.get("Country")),
+                service_location=to_string(data.get("Service_Location")),
 
                 candidate_status=candidate_status,
                 stage=stage,
-                tier=data.get("Tier_Level"),
+                tier=to_string(data.get("Tier_Level")),
 
-                language=data.get("Language"),
+                language=to_string(data.get("Language")),
                 languages=languages,
 
                 candidate_owner=candidate_owner,
-                recruitment_owner=recruitment_owner,
-                assigned_client=data.get("Client"),
-                agreed_rate=data.get("Agreed_Rate"),
+                recruitment_owner=to_string(recruitment_owner),
+                assigned_client=to_string(data.get("Client")),
+                agreed_rate=to_string(data.get("Agreed_Rate")),
 
                 language_assessment_passed=parse_bool(data.get("Language_Assesment_Pased")),
-                language_assessment_grader=data.get("Language_Assessment_Grader"),
+                language_assessment_grader=to_string(data.get("Language_Assessment_Grader")),
                 language_assessment_date=la_date,
                 bgv_passed=parse_bool(data.get("BGV_Passed")),
                 system_specs_approved=parse_bool(data.get("Systems_Specs_Approved")),
@@ -407,19 +419,19 @@ class SyncService:
                 offer_accepted=parse_bool(data.get("Offer_Accepted")),
                 offer_accepted_date=offer_date,
                 training_accepted=parse_bool(data.get("Training_Accepted")),
-                training_status=data.get("Training_Status"),
+                training_status=to_string(data.get("Training_Status")),
                 training_start_date=training_start,
                 training_end_date=training_end,
                 alfa_one_onboarded=parse_bool(data.get("Alfa_One_Fully_Onboarded")),
 
                 next_followup=next_followup,
-                followup_reason=data.get("Followup_Reason"),
+                followup_reason=to_string(data.get("Followup_Reason")),
                 recontact_date=recontact_date,
 
                 last_activity_date=last_activity,
                 zoho_modified_time=modified_time,
-                candidate_source=data.get("Candidate_Source"),
-                disqualification_reason=data.get("Disqualification_Reason"),
+                candidate_source=to_string(data.get("Candidate_Source")),
+                disqualification_reason=to_string(data.get("Disqualification_Reason")),
 
                 stage_entered_date=datetime.utcnow(),
                 days_in_stage=0,
