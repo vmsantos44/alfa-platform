@@ -369,8 +369,11 @@ class SyncService:
 
             # Update stage tracking if stage changed
             if old_stage != stage:
-                existing.stage_entered_date = datetime.utcnow()
+                existing.stage_entered_date = last_activity or datetime.utcnow()
                 existing.days_in_stage = 0
+            # If no stage_entered_date, use last_activity as proxy
+            elif not existing.stage_entered_date:
+                existing.stage_entered_date = last_activity or datetime.utcnow()
 
             # Determine flags based on status
             status_lower = (lead_status or "").lower()
@@ -435,8 +438,9 @@ class SyncService:
                 candidate_source=to_string(data.get("Lead_Source")),
                 disqualification_reason=to_string(data.get("Disqualification_Reason")),
 
-                stage_entered_date=datetime.utcnow(),
-                days_in_stage=0,
+                # Use last_activity_date as proxy for stage entry (best available from Zoho)
+                stage_entered_date=last_activity or datetime.utcnow(),
+                days_in_stage=0,  # Will be calculated by _update_days_in_stage
                 needs_training="training" in (lead_status or "").lower() and "completed" not in (lead_status or "").lower(),
                 has_pending_documents="document" in (lead_status or "").lower(),
                 last_synced=datetime.utcnow()
