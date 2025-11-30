@@ -16,7 +16,7 @@ class CandidateBase(BaseModel):
     full_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    stage: str = "New Lead"
+    stage: str = "New Candidate"
     assigned_client: Optional[str] = None
     tier: Optional[str] = None
     languages: Optional[str] = None

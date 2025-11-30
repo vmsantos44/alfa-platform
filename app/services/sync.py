@@ -20,12 +20,12 @@ class SyncService:
 
     # Map Zoho Candidate Status to our pipeline stages
     STATUS_TO_STAGE_MAP = {
-        # New Leads
-        "New Candidate": "New Lead",
-        "LinkedIn Applicants": "New Lead",
-        "ZipRecruiter Leads": "New Lead",
-        "LinkedIn Leads": "New Lead",
-        "Requested Resume": "New Lead",
+        # New Candidates
+        "New Candidate": "New Candidate",
+        "LinkedIn Applicants": "New Candidate",
+        "ZipRecruiter Leads": "New Candidate",
+        "LinkedIn Leads": "New Candidate",
+        "Requested Resume": "New Candidate",
 
         # Screening
         "Screening": "Screening",
@@ -88,7 +88,7 @@ class SyncService:
     def map_status_to_stage(cls, candidate_status: str) -> str:
         """Map Zoho Candidate Status to our pipeline stage"""
         if not candidate_status:
-            return "New Lead"
+            return "New Candidate"
 
         # Direct mapping
         if candidate_status in cls.STATUS_TO_STAGE_MAP:
@@ -117,8 +117,8 @@ class SyncService:
         if "qualified" in status_lower and "not" not in status_lower:
             return "Screening"
 
-        # Default to New Lead if unknown
-        return "New Lead"
+        # Default to New Candidate if unknown
+        return "New Candidate"
 
     @classmethod
     async def sync_candidates_from_zoho(cls) -> Dict[str, Any]:
@@ -484,10 +484,10 @@ class SyncService:
                 return {"message": "Data already exists"}
 
             sample_candidates = [
-                # New Leads
-                {"name": "Maria Santos", "email": "maria.santos@email.com", "stage": "New Lead", "languages": "Spanish, Portuguese"},
-                {"name": "Juan Garcia", "email": "juan.garcia@email.com", "stage": "New Lead", "languages": "Spanish"},
-                {"name": "Li Wei", "email": "li.wei@email.com", "stage": "New Lead", "languages": "Mandarin, Cantonese"},
+                # New Candidates
+                {"name": "Maria Santos", "email": "maria.santos@email.com", "stage": "New Candidate", "languages": "Spanish, Portuguese"},
+                {"name": "Juan Garcia", "email": "juan.garcia@email.com", "stage": "New Candidate", "languages": "Spanish"},
+                {"name": "Li Wei", "email": "li.wei@email.com", "stage": "New Candidate", "languages": "Mandarin, Cantonese"},
 
                 # Screening
                 {"name": "Ahmed Hassan", "email": "ahmed.h@email.com", "stage": "Screening", "languages": "Arabic", "days": 8, "unresponsive": True},
