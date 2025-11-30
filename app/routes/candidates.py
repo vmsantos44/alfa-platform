@@ -286,19 +286,22 @@ async def list_candidates(
         else:
             conditions.append(CandidateCache.candidate_owner.in_(owners))
 
-    # Date range filter
+    # Date range filter (using last_activity_date from Zoho)
     if date_from:
         from datetime import datetime
         try:
             date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
-            conditions.append(CandidateCache.created_at >= date_from_dt)
+            conditions.append(CandidateCache.last_activity_date >= date_from_dt)
         except ValueError:
             pass
     if date_to:
         from datetime import datetime
         try:
             date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
-            conditions.append(CandidateCache.created_at <= date_to_dt)
+            # Add 1 day to include the end date fully
+            from datetime import timedelta
+            date_to_dt = date_to_dt + timedelta(days=1)
+            conditions.append(CandidateCache.last_activity_date < date_to_dt)
         except ValueError:
             pass
 
