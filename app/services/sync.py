@@ -171,7 +171,7 @@ class SyncService:
                                 "Training_Status", "Training_Start_Date", "Training_End_Date",
                                 "Alfa_One_Fully_Onboarded", "abrsmartfollowupextensionforzohocrm__Next_Followup",
                                 "abrsmartfollowupextensionforzohocrm__Followup_Reason",
-                                "Recontact_Date", "Last_Activity_Time", "Modified_Time",
+                                "Recontact_Date", "Last_Activity_Time", "Modified_Time", "Created_Time",
                                 "Lead_Source", "Disqualification_Reason", "WhatsApp_Number"
                             ]
                         )
@@ -300,6 +300,7 @@ class SyncService:
 
         # Parse dates
         modified_time = parse_date(data.get("Modified_Time"))
+        created_time = parse_date(data.get("Created_Time"))  # When lead was created in Zoho
         last_activity = parse_date(data.get("Last_Activity_Time"))
         next_followup = parse_date(data.get("abrsmartfollowupextensionforzohocrm__Next_Followup"))
         recontact_date = parse_date(data.get("Recontact_Date"))
@@ -364,16 +365,18 @@ class SyncService:
 
             existing.last_activity_date = last_activity
             existing.zoho_modified_time = modified_time
+            existing.zoho_created_time = created_time
             existing.candidate_source = to_string(data.get("Lead_Source"))
             existing.disqualification_reason = to_string(data.get("Disqualification_Reason"))
 
             # Update stage tracking if stage changed
             if old_stage != stage:
+                # Use last_activity as stage entry date when stage changes
                 existing.stage_entered_date = last_activity or datetime.utcnow()
                 existing.days_in_stage = 0
-            # If no stage_entered_date, use last_activity as proxy
+            # If no stage_entered_date, use created_time (when lead was first added)
             elif not existing.stage_entered_date:
-                existing.stage_entered_date = last_activity or datetime.utcnow()
+                existing.stage_entered_date = created_time or last_activity or datetime.utcnow()
 
             # Determine flags based on status
             status_lower = (lead_status or "").lower()
@@ -435,11 +438,12 @@ class SyncService:
 
                 last_activity_date=last_activity,
                 zoho_modified_time=modified_time,
+                zoho_created_time=created_time,
                 candidate_source=to_string(data.get("Lead_Source")),
                 disqualification_reason=to_string(data.get("Disqualification_Reason")),
 
-                # Use last_activity_date as proxy for stage entry (best available from Zoho)
-                stage_entered_date=last_activity or datetime.utcnow(),
+                # Use created_time (when lead was added to Zoho) for stage entry
+                stage_entered_date=created_time or last_activity or datetime.utcnow(),
                 days_in_stage=0,  # Will be calculated by _update_days_in_stage
                 needs_training="training" in (lead_status or "").lower() and "completed" not in (lead_status or "").lower(),
                 has_pending_documents="document" in (lead_status or "").lower(),
