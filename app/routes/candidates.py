@@ -242,6 +242,10 @@ async def list_candidates(
     unresponsive: Optional[bool] = Query(None, description="Filter unresponsive"),
     pending_docs: Optional[bool] = Query(None, description="Filter pending documents"),
     needs_training: Optional[bool] = Query(None, description="Filter needs training"),
+    lang_assessment_passed: Optional[bool] = Query(None, description="Filter by language assessment passed"),
+    bgv_passed: Optional[bool] = Query(None, description="Filter by background check passed"),
+    system_specs_approved: Optional[bool] = Query(None, description="Filter by system specs approved"),
+    offer_accepted: Optional[bool] = Query(None, description="Filter by offer accepted"),
     days_min: Optional[int] = Query(None, description="Minimum days in stage"),
     days_max: Optional[int] = Query(None, description="Maximum days in stage"),
     language: Optional[str] = Query(None, description="Filter by language (comma-separated)"),
@@ -285,6 +289,14 @@ async def list_candidates(
         conditions.append(CandidateCache.has_pending_documents == pending_docs)
     if needs_training is not None:
         conditions.append(CandidateCache.needs_training == needs_training)
+    if lang_assessment_passed is not None:
+        conditions.append(CandidateCache.language_assessment_passed == lang_assessment_passed)
+    if bgv_passed is not None:
+        conditions.append(CandidateCache.bgv_passed == bgv_passed)
+    if system_specs_approved is not None:
+        conditions.append(CandidateCache.system_specs_approved == system_specs_approved)
+    if offer_accepted is not None:
+        conditions.append(CandidateCache.offer_accepted == offer_accepted)
 
     # Days in stage range
     if days_min is not None:
