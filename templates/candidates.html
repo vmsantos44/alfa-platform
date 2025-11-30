@@ -288,7 +288,7 @@
             -->
 
             <!-- Status Filters -->
-            <div class="lg:col-span-3">
+            <div class="lg:col-span-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Status Filters</label>
                 <div class="flex flex-wrap gap-4">
                     <label class="flex items-center gap-2 cursor-pointer">
@@ -319,6 +319,46 @@
                             class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
                         >
                         <span class="text-sm text-gray-600">Needs Training</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.langAssessmentPassed"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Lang Assessment Passed</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.bgvPassed"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">BGV Passed</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.systemSpecsApproved"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">System Specs Approved</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.offerAccepted"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Offer Accepted</span>
                     </label>
                 </div>
             </div>
@@ -625,7 +665,11 @@ function candidatesApp() {
             dateTo: '',
             unresponsive: false,
             pendingDocs: false,
-            needsTraining: false
+            needsTraining: false,
+            langAssessmentPassed: false,
+            bgvPassed: false,
+            systemSpecsApproved: false,
+            offerAccepted: false
         },
         allStages: [
             'New Candidate',
@@ -659,7 +703,11 @@ function candidatesApp() {
                    this.filters.dateTo ||
                    this.filters.unresponsive ||
                    this.filters.pendingDocs ||
-                   this.filters.needsTraining;
+                   this.filters.needsTraining ||
+                   this.filters.langAssessmentPassed ||
+                   this.filters.bgvPassed ||
+                   this.filters.systemSpecsApproved ||
+                   this.filters.offerAccepted;
         },
 
         get activeFilterCount() {
@@ -674,6 +722,10 @@ function candidatesApp() {
             if (this.filters.unresponsive) count++;
             if (this.filters.pendingDocs) count++;
             if (this.filters.needsTraining) count++;
+            if (this.filters.langAssessmentPassed) count++;
+            if (this.filters.bgvPassed) count++;
+            if (this.filters.systemSpecsApproved) count++;
+            if (this.filters.offerAccepted) count++;
             return count;
         },
 
@@ -701,6 +753,10 @@ function candidatesApp() {
             if (params.get('unresponsive') === 'true') this.filters.unresponsive = true;
             if (params.get('pending_docs') === 'true') this.filters.pendingDocs = true;
             if (params.get('needs_training') === 'true') this.filters.needsTraining = true;
+            if (params.get('lang_assessment_passed') === 'true') this.filters.langAssessmentPassed = true;
+            if (params.get('bgv_passed') === 'true') this.filters.bgvPassed = true;
+            if (params.get('system_specs_approved') === 'true') this.filters.systemSpecsApproved = true;
+            if (params.get('offer_accepted') === 'true') this.filters.offerAccepted = true;
             if (params.get('view')) this.viewMode = params.get('view');
 
             // Show advanced filters if any are active
@@ -722,6 +778,10 @@ function candidatesApp() {
             if (this.filters.unresponsive) params.set('unresponsive', 'true');
             if (this.filters.pendingDocs) params.set('pending_docs', 'true');
             if (this.filters.needsTraining) params.set('needs_training', 'true');
+            if (this.filters.langAssessmentPassed) params.set('lang_assessment_passed', 'true');
+            if (this.filters.bgvPassed) params.set('bgv_passed', 'true');
+            if (this.filters.systemSpecsApproved) params.set('system_specs_approved', 'true');
+            if (this.filters.offerAccepted) params.set('offer_accepted', 'true');
             if (this.viewMode !== 'pipeline') params.set('view', this.viewMode);
 
             const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
@@ -742,7 +802,11 @@ function candidatesApp() {
                 dateTo: '',
                 unresponsive: false,
                 pendingDocs: false,
-                needsTraining: false
+                needsTraining: false,
+                langAssessmentPassed: false,
+                bgvPassed: false,
+                systemSpecsApproved: false,
+                offerAccepted: false
             };
             this.applyFilters();
         },
@@ -786,6 +850,10 @@ function candidatesApp() {
                 if (this.filters.unresponsive) params.append('unresponsive', 'true');
                 if (this.filters.pendingDocs) params.append('pending_docs', 'true');
                 if (this.filters.needsTraining) params.append('needs_training', 'true');
+                if (this.filters.langAssessmentPassed) params.append('lang_assessment_passed', 'true');
+                if (this.filters.bgvPassed) params.append('bgv_passed', 'true');
+                if (this.filters.systemSpecsApproved) params.append('system_specs_approved', 'true');
+                if (this.filters.offerAccepted) params.append('offer_accepted', 'true');
 
                 const response = await fetch(`/api/candidates/?${params}`);
                 this.candidates = await response.json();
