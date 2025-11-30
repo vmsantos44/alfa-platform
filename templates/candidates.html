@@ -96,7 +96,7 @@
     <!-- Pipeline View (Kanban) -->
     <div x-show="!loading && viewMode === 'pipeline'" x-cloak class="overflow-x-auto pb-4">
         <div class="flex gap-4 min-w-max">
-            <template x-for="stage in pipeline" :key="stage.stage">
+            <template x-for="stage in filteredPipeline" :key="stage.stage">
                 <div class="w-72 flex-shrink-0">
                     <!-- Stage Header -->
                     <div
@@ -385,8 +385,17 @@ function candidatesApp() {
             'Interview Completed',
             'Assessment',
             'Onboarding',
-            'Active'
+            'Active',
+            'Inactive',
+            'Rejected'
         ],
+
+        get filteredPipeline() {
+            if (!this.filters.stage) {
+                return this.pipeline;
+            }
+            return this.pipeline.filter(stage => stage.stage === this.filters.stage);
+        },
 
         async init() {
             await this.fetchPipeline();
