@@ -260,6 +260,32 @@ class Task(Base):
         return f"<Task {self.title} ({self.status})>"
 
 
+class CandidateNote(Base):
+    """
+    Internal notes/comments on candidates.
+    Allows team members to leave notes during recruitment.
+    """
+    __tablename__ = "candidate_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(Integer, index=True)
+
+    # Note content
+    content: Mapped[str] = mapped_column(Text)
+    note_type: Mapped[str] = mapped_column(String(50), default="general")
+    # types: general, interview, assessment, follow_up, document, system
+
+    # Author
+    created_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<CandidateNote {self.id} for candidate {self.candidate_id}>"
+
+
 class SyncLog(Base):
     """
     Track synchronization with Zoho CRM.
