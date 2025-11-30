@@ -124,10 +124,28 @@ async def get_filter_options(db: AsyncSession = Depends(get_db)):
         )
         stage_counts[stage] = count_result.scalar() or 0
 
+    # Get unique tiers
+    tier_result = await db.execute(
+        select(CandidateCache.tier)
+        .where(CandidateCache.tier.isnot(None))
+        .distinct()
+    )
+    tiers = sorted([t for t in tier_result.scalars().all() if t])
+
+    # Get unique states
+    state_result = await db.execute(
+        select(CandidateCache.state)
+        .where(CandidateCache.state.isnot(None))
+        .distinct()
+    )
+    states = sorted([s for s in state_result.scalars().all() if s])
+
     return {
         "languages": sorted(list(all_languages)),
         "owners": sorted(owners),
-        "stages": stage_counts
+        "stages": stage_counts,
+        "tiers": tiers,
+        "states": states
     }
 
 
@@ -228,6 +246,8 @@ async def list_candidates(
     days_max: Optional[int] = Query(None, description="Maximum days in stage"),
     language: Optional[str] = Query(None, description="Filter by language (comma-separated)"),
     owner: Optional[str] = Query(None, description="Filter by owner (comma-separated)"),
+    tier: Optional[str] = Query(None, description="Filter by tier (comma-separated)"),
+    state: Optional[str] = Query(None, description="Filter by state (comma-separated)"),
     date_from: Optional[str] = Query(None, description="Date added from (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Date added to (YYYY-MM-DD)"),
     limit: int = Query(50, le=200),
@@ -285,6 +305,22 @@ async def list_candidates(
             conditions.append(CandidateCache.candidate_owner == owners[0])
         else:
             conditions.append(CandidateCache.candidate_owner.in_(owners))
+
+    # Tier filter
+    if tier:
+        tiers = [t.strip() for t in tier.split(",")]
+        if len(tiers) == 1:
+            conditions.append(CandidateCache.tier == tiers[0])
+        else:
+            conditions.append(CandidateCache.tier.in_(tiers))
+
+    # State filter
+    if state:
+        states = [s.strip() for s in state.split(",")]
+        if len(states) == 1:
+            conditions.append(CandidateCache.state == states[0])
+        else:
+            conditions.append(CandidateCache.state.in_(states))
 
     # Date range filter (using last_activity_date from Zoho)
     if date_from:
