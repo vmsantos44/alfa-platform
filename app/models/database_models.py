@@ -122,6 +122,7 @@ class CandidateCache(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_synced: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     zoho_modified_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    zoho_created_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # When lead was created in Zoho
 
     def __repr__(self):
         return f"<Candidate {self.full_name} ({self.stage})>"
