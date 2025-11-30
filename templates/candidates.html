@@ -10,8 +10,8 @@
 {% block content %}
 <div x-data="candidatesApp()" x-init="init()">
 
-    <!-- Filters Bar -->
-    <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+    <!-- Main Filters Bar -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
         <div class="flex flex-wrap items-center gap-4">
             <!-- Search -->
             <div class="flex-1 min-w-[200px]">
@@ -19,7 +19,7 @@
                     <input
                         type="text"
                         x-model="filters.search"
-                        @input.debounce.300ms="fetchCandidates()"
+                        @input.debounce.300ms="applyFilters()"
                         placeholder="Search by name or email..."
                         class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
                     >
@@ -29,44 +29,27 @@
                 </div>
             </div>
 
-            <!-- Stage Filter -->
-            <select
-                x-model="filters.stage"
-                @change="fetchCandidates()"
-                class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+            <!-- Advanced Filters Toggle -->
+            <button
+                @click="showAdvancedFilters = !showAdvancedFilters"
+                class="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                :class="hasActiveFilters ? 'border-alfa-blue text-alfa-blue' : 'text-gray-600'"
             >
-                <option value="">All Stages</option>
-                <option value="New Candidate">New Candidate</option>
-                <option value="Screening">Screening</option>
-                <option value="Interview Scheduled">Interview Scheduled</option>
-                <option value="Interview Completed">Interview Completed</option>
-                <option value="Assessment">Assessment</option>
-                <option value="Onboarding">Onboarding</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Rejected">Rejected</option>
-            </select>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                <span>Filters</span>
+                <span x-show="activeFilterCount > 0" class="bg-alfa-blue text-white text-xs px-2 py-0.5 rounded-full" x-text="activeFilterCount"></span>
+            </button>
 
-            <!-- Filter Toggles -->
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                    type="checkbox"
-                    x-model="filters.unresponsive"
-                    @change="fetchCandidates()"
-                    class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
-                >
-                <span class="text-sm text-gray-600">Unresponsive only</span>
-            </label>
-
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                    type="checkbox"
-                    x-model="filters.pendingDocs"
-                    @change="fetchCandidates()"
-                    class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
-                >
-                <span class="text-sm text-gray-600">Pending docs</span>
-            </label>
+            <!-- Clear Filters -->
+            <button
+                x-show="hasActiveFilters"
+                @click="clearFilters()"
+                class="text-sm text-red-600 hover:text-red-800"
+            >
+                Clear all
+            </button>
 
             <!-- View Toggle -->
             <div class="flex border rounded-lg overflow-hidden">
@@ -85,6 +68,190 @@
                     List
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filters Panel -->
+    <div x-show="showAdvancedFilters" x-cloak class="bg-white rounded-xl shadow-sm p-4 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+            <!-- Stage Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+                <div class="relative" x-data="{ open: false }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.stages.length ? filters.stages.length + ' selected' : 'All Stages'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                        <template x-for="stage in allStages" :key="stage">
+                            <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    :value="stage"
+                                    x-model="filters.stages"
+                                    @change="applyFilters()"
+                                    class="w-4 h-4 text-alfa-blue rounded"
+                                >
+                                <span class="ml-2 text-sm" x-text="stage"></span>
+                                <span class="ml-auto text-xs text-gray-400" x-text="'(' + (filterOptions.stages?.[stage] || 0) + ')'"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Days in Stage Range -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Days in Stage</label>
+                <div class="flex gap-2">
+                    <input
+                        type="number"
+                        x-model="filters.daysMin"
+                        @change="applyFilters()"
+                        placeholder="Min"
+                        min="0"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                    <input
+                        type="number"
+                        x-model="filters.daysMax"
+                        @change="applyFilters()"
+                        placeholder="Max"
+                        min="0"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                </div>
+            </div>
+
+            <!-- Date Added Range -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Date Added</label>
+                <div class="flex gap-2">
+                    <input
+                        type="date"
+                        x-model="filters.dateFrom"
+                        @change="applyFilters()"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                    <input
+                        type="date"
+                        x-model="filters.dateTo"
+                        @change="applyFilters()"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                </div>
+            </div>
+
+            <!-- Language Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <div class="relative" x-data="{ open: false, search: '' }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.languages.length ? filters.languages.length + ' selected' : 'All Languages'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg">
+                        <input
+                            type="text"
+                            x-model="search"
+                            placeholder="Search languages..."
+                            class="w-full px-3 py-2 border-b text-sm"
+                        >
+                        <div class="max-h-48 overflow-auto">
+                            <template x-for="lang in filterOptions.languages?.filter(l => l.toLowerCase().includes(search.toLowerCase()))" :key="lang">
+                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        :value="lang"
+                                        x-model="filters.languages"
+                                        @change="applyFilters()"
+                                        class="w-4 h-4 text-alfa-blue rounded"
+                                    >
+                                    <span class="ml-2 text-sm" x-text="lang"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Owner Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                <div class="relative" x-data="{ open: false }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.owners.length ? filters.owners.length + ' selected' : 'All Owners'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                        <template x-for="owner in filterOptions.owners" :key="owner">
+                            <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    :value="owner"
+                                    x-model="filters.owners"
+                                    @change="applyFilters()"
+                                    class="w-4 h-4 text-alfa-blue rounded"
+                                >
+                                <span class="ml-2 text-sm" x-text="owner"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Filters -->
+            <div class="lg:col-span-3">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status Filters</label>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.unresponsive"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Unresponsive</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.pendingDocs"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Pending Documents</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.needsTraining"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Needs Training</span>
+                    </label>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -368,17 +535,26 @@ function candidatesApp() {
     return {
         loading: true,
         viewMode: 'pipeline',
+        showAdvancedFilters: false,
         candidates: [],
         pipeline: [],
+        filterOptions: { languages: [], owners: [], stages: {} },
         selectedCandidate: null,
         newStage: '',
         filters: {
             search: '',
-            stage: '',
+            stages: [],
+            languages: [],
+            owners: [],
+            daysMin: '',
+            daysMax: '',
+            dateFrom: '',
+            dateTo: '',
             unresponsive: false,
-            pendingDocs: false
+            pendingDocs: false,
+            needsTraining: false
         },
-        stages: [
+        allStages: [
             'New Candidate',
             'Screening',
             'Interview Scheduled',
@@ -391,16 +567,115 @@ function candidatesApp() {
         ],
 
         get filteredPipeline() {
-            if (!this.filters.stage) {
+            if (!this.filters.stages.length) {
                 return this.pipeline;
             }
-            return this.pipeline.filter(stage => stage.stage === this.filters.stage);
+            return this.pipeline.filter(stage => this.filters.stages.includes(stage.stage));
+        },
+
+        get hasActiveFilters() {
+            return this.filters.search ||
+                   this.filters.stages.length > 0 ||
+                   this.filters.languages.length > 0 ||
+                   this.filters.owners.length > 0 ||
+                   this.filters.daysMin ||
+                   this.filters.daysMax ||
+                   this.filters.dateFrom ||
+                   this.filters.dateTo ||
+                   this.filters.unresponsive ||
+                   this.filters.pendingDocs ||
+                   this.filters.needsTraining;
+        },
+
+        get activeFilterCount() {
+            let count = 0;
+            if (this.filters.stages.length) count++;
+            if (this.filters.languages.length) count++;
+            if (this.filters.owners.length) count++;
+            if (this.filters.daysMin || this.filters.daysMax) count++;
+            if (this.filters.dateFrom || this.filters.dateTo) count++;
+            if (this.filters.unresponsive) count++;
+            if (this.filters.pendingDocs) count++;
+            if (this.filters.needsTraining) count++;
+            return count;
         },
 
         async init() {
+            // Load filters from URL params
+            this.loadFiltersFromUrl();
+            await this.fetchFilterOptions();
             await this.fetchPipeline();
             await this.fetchCandidates();
             this.loading = false;
+        },
+
+        loadFiltersFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('search')) this.filters.search = params.get('search');
+            if (params.get('stages')) this.filters.stages = params.get('stages').split(',');
+            if (params.get('languages')) this.filters.languages = params.get('languages').split(',');
+            if (params.get('owners')) this.filters.owners = params.get('owners').split(',');
+            if (params.get('days_min')) this.filters.daysMin = params.get('days_min');
+            if (params.get('days_max')) this.filters.daysMax = params.get('days_max');
+            if (params.get('date_from')) this.filters.dateFrom = params.get('date_from');
+            if (params.get('date_to')) this.filters.dateTo = params.get('date_to');
+            if (params.get('unresponsive') === 'true') this.filters.unresponsive = true;
+            if (params.get('pending_docs') === 'true') this.filters.pendingDocs = true;
+            if (params.get('needs_training') === 'true') this.filters.needsTraining = true;
+            if (params.get('view')) this.viewMode = params.get('view');
+
+            // Show advanced filters if any are active
+            if (this.hasActiveFilters) this.showAdvancedFilters = true;
+        },
+
+        updateUrl() {
+            const params = new URLSearchParams();
+            if (this.filters.search) params.set('search', this.filters.search);
+            if (this.filters.stages.length) params.set('stages', this.filters.stages.join(','));
+            if (this.filters.languages.length) params.set('languages', this.filters.languages.join(','));
+            if (this.filters.owners.length) params.set('owners', this.filters.owners.join(','));
+            if (this.filters.daysMin) params.set('days_min', this.filters.daysMin);
+            if (this.filters.daysMax) params.set('days_max', this.filters.daysMax);
+            if (this.filters.dateFrom) params.set('date_from', this.filters.dateFrom);
+            if (this.filters.dateTo) params.set('date_to', this.filters.dateTo);
+            if (this.filters.unresponsive) params.set('unresponsive', 'true');
+            if (this.filters.pendingDocs) params.set('pending_docs', 'true');
+            if (this.filters.needsTraining) params.set('needs_training', 'true');
+            if (this.viewMode !== 'pipeline') params.set('view', this.viewMode);
+
+            const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        },
+
+        clearFilters() {
+            this.filters = {
+                search: '',
+                stages: [],
+                languages: [],
+                owners: [],
+                daysMin: '',
+                daysMax: '',
+                dateFrom: '',
+                dateTo: '',
+                unresponsive: false,
+                pendingDocs: false,
+                needsTraining: false
+            };
+            this.applyFilters();
+        },
+
+        async applyFilters() {
+            this.updateUrl();
+            await this.fetchCandidates();
+        },
+
+        async fetchFilterOptions() {
+            try {
+                const response = await fetch('/api/candidates/filter-options');
+                this.filterOptions = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch filter options:', error);
+            }
         },
 
         async fetchPipeline() {
@@ -416,9 +691,16 @@ function candidatesApp() {
             try {
                 const params = new URLSearchParams();
                 if (this.filters.search) params.append('search', this.filters.search);
-                if (this.filters.stage) params.append('stage', this.filters.stage);
+                if (this.filters.stages.length) params.append('stage', this.filters.stages.join(','));
+                if (this.filters.languages.length) params.append('language', this.filters.languages.join(','));
+                if (this.filters.owners.length) params.append('owner', this.filters.owners.join(','));
+                if (this.filters.daysMin) params.append('days_min', this.filters.daysMin);
+                if (this.filters.daysMax) params.append('days_max', this.filters.daysMax);
+                if (this.filters.dateFrom) params.append('date_from', this.filters.dateFrom);
+                if (this.filters.dateTo) params.append('date_to', this.filters.dateTo);
                 if (this.filters.unresponsive) params.append('unresponsive', 'true');
                 if (this.filters.pendingDocs) params.append('pending_docs', 'true');
+                if (this.filters.needsTraining) params.append('needs_training', 'true');
 
                 const response = await fetch(`/api/candidates/?${params}`);
                 this.candidates = await response.json();
