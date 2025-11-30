@@ -70,7 +70,10 @@ async def get_pipeline(
                     stage=c.stage,
                     days_in_stage=c.days_in_stage,
                     is_unresponsive=c.is_unresponsive,
-                    has_pending_documents=c.has_pending_documents
+                    has_pending_documents=c.has_pending_documents,
+                    needs_training=c.needs_training,
+                    tier=c.tier,
+                    languages=c.languages
                 )
                 for c in candidates_result.scalars().all()
             ]
