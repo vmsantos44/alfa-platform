@@ -48,6 +48,9 @@ class CandidateSummary(BaseModel):
     days_in_stage: int = 0
     is_unresponsive: bool = False
     has_pending_documents: bool = False
+    needs_training: bool = False
+    tier: Optional[str] = None
+    languages: Optional[str] = None
 
     class Config:
         from_attributes = True
