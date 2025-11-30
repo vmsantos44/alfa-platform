@@ -85,6 +85,53 @@ async def get_pipeline(
 
 
 # ============================================
+# Filter Options (for populating dropdowns)
+# ============================================
+
+@router.get("/filter-options")
+async def get_filter_options(db: AsyncSession = Depends(get_db)):
+    """Get available filter options (languages, owners, etc.)"""
+    # Get unique languages
+    lang_result = await db.execute(
+        select(CandidateCache.languages)
+        .where(CandidateCache.languages.isnot(None))
+        .distinct()
+    )
+    all_languages = set()
+    for row in lang_result.scalars().all():
+        if row:
+            # Split languages by common separators
+            for lang in row.replace(";", ",").split(","):
+                lang = lang.strip()
+                if lang:
+                    all_languages.add(lang)
+
+    # Get unique owners
+    owner_result = await db.execute(
+        select(CandidateCache.candidate_owner)
+        .where(CandidateCache.candidate_owner.isnot(None))
+        .distinct()
+    )
+    owners = [o for o in owner_result.scalars().all() if o]
+
+    # Get stage counts
+    stage_counts = {}
+    for stage in ["New Candidate", "Screening", "Interview Scheduled", "Interview Completed",
+                  "Assessment", "Onboarding", "Active", "Inactive", "Rejected"]:
+        count_result = await db.execute(
+            select(func.count(CandidateCache.id))
+            .where(CandidateCache.stage == stage)
+        )
+        stage_counts[stage] = count_result.scalar() or 0
+
+    return {
+        "languages": sorted(list(all_languages)),
+        "owners": sorted(owners),
+        "stages": stage_counts
+    }
+
+
+# ============================================
 # Bulk Operations (MUST be before /{candidate_id} route)
 # ============================================
 
@@ -172,21 +219,36 @@ async def get_unresponsive_candidates(
 
 @router.get("/", response_model=List[CandidateResponse])
 async def list_candidates(
-    stage: Optional[str] = Query(None, description="Filter by stage"),
+    stage: Optional[str] = Query(None, description="Filter by stage (comma-separated for multi)"),
     search: Optional[str] = Query(None, description="Search by name or email"),
     unresponsive: Optional[bool] = Query(None, description="Filter unresponsive"),
     pending_docs: Optional[bool] = Query(None, description="Filter pending documents"),
+    needs_training: Optional[bool] = Query(None, description="Filter needs training"),
+    days_min: Optional[int] = Query(None, description="Minimum days in stage"),
+    days_max: Optional[int] = Query(None, description="Maximum days in stage"),
+    language: Optional[str] = Query(None, description="Filter by language (comma-separated)"),
+    owner: Optional[str] = Query(None, description="Filter by owner (comma-separated)"),
+    date_from: Optional[str] = Query(None, description="Date added from (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Date added to (YYYY-MM-DD)"),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db)
 ):
-    """List candidates with filters"""
+    """List candidates with advanced filters"""
     query = select(CandidateCache)
 
     # Apply filters
     conditions = []
+
+    # Multi-select stage filter
     if stage:
-        conditions.append(CandidateCache.stage == stage)
+        stages = [s.strip() for s in stage.split(",")]
+        if len(stages) == 1:
+            conditions.append(CandidateCache.stage == stages[0])
+        else:
+            conditions.append(CandidateCache.stage.in_(stages))
+
+    # Search filter
     if search:
         search_term = f"%{search}%"
         conditions.append(
@@ -195,10 +257,50 @@ async def list_candidates(
                 CandidateCache.email.ilike(search_term)
             )
         )
+
+    # Boolean filters
     if unresponsive is not None:
         conditions.append(CandidateCache.is_unresponsive == unresponsive)
     if pending_docs is not None:
         conditions.append(CandidateCache.has_pending_documents == pending_docs)
+    if needs_training is not None:
+        conditions.append(CandidateCache.needs_training == needs_training)
+
+    # Days in stage range
+    if days_min is not None:
+        conditions.append(CandidateCache.days_in_stage >= days_min)
+    if days_max is not None:
+        conditions.append(CandidateCache.days_in_stage <= days_max)
+
+    # Language filter (search in languages field)
+    if language:
+        languages = [l.strip() for l in language.split(",")]
+        lang_conditions = [CandidateCache.languages.ilike(f"%{lang}%") for lang in languages]
+        conditions.append(or_(*lang_conditions))
+
+    # Owner filter
+    if owner:
+        owners = [o.strip() for o in owner.split(",")]
+        if len(owners) == 1:
+            conditions.append(CandidateCache.candidate_owner == owners[0])
+        else:
+            conditions.append(CandidateCache.candidate_owner.in_(owners))
+
+    # Date range filter
+    if date_from:
+        from datetime import datetime
+        try:
+            date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
+            conditions.append(CandidateCache.created_at >= date_from_dt)
+        except ValueError:
+            pass
+    if date_to:
+        from datetime import datetime
+        try:
+            date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
+            conditions.append(CandidateCache.created_at <= date_to_dt)
+        except ValueError:
+            pass
 
     if conditions:
         query = query.where(and_(*conditions))
