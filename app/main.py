@@ -91,6 +91,12 @@ async def candidates_page(request: Request):
     return templates.TemplateResponse("candidates.html", {"request": request})
 
 
+@app.get("/candidates/{candidate_id}", response_class=HTMLResponse)
+async def candidate_detail_page(request: Request, candidate_id: int):
+    """Candidate detail page"""
+    return templates.TemplateResponse("candidate_detail.html", {"request": request})
+
+
 @app.get("/scheduling", response_class=HTMLResponse)
 async def scheduling_page(request: Request):
     """Scheduling/Calendar page"""

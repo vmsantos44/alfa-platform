@@ -9,12 +9,17 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.database_models import CandidateCache, ActionAlert, Interview, Task
+from app.models.database_models import CandidateCache, ActionAlert, Interview, Task, CandidateNote
 from app.models.schemas import (
     CandidateResponse,
     CandidateSummary,
+    CandidateDetailResponse,
+    CandidateNoteCreate,
+    CandidateNoteResponse,
     PipelineStage,
-    SuccessResponse
+    SuccessResponse,
+    InterviewResponse,
+    TaskResponse
 )
 from app.integrations.zoho.crm import get_crm_record_url
 
@@ -421,6 +426,253 @@ async def get_candidate(
         needs_training=candidate.needs_training,
         zoho_url=get_crm_record_url(candidate.zoho_module, candidate.zoho_id)
     )
+
+
+@router.get("/{candidate_id}/detail", response_model=CandidateDetailResponse)
+async def get_candidate_detail(
+    candidate_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get full candidate detail with all fields and related data"""
+    result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Fetch related notes
+    notes_result = await db.execute(
+        select(CandidateNote)
+        .where(CandidateNote.candidate_id == candidate_id)
+        .order_by(CandidateNote.created_at.desc())
+    )
+    notes = [
+        CandidateNoteResponse(
+            id=n.id,
+            candidate_id=n.candidate_id,
+            content=n.content,
+            note_type=n.note_type,
+            created_by=n.created_by,
+            created_at=n.created_at,
+            updated_at=n.updated_at
+        )
+        for n in notes_result.scalars().all()
+    ]
+
+    # Fetch related interviews
+    interviews_result = await db.execute(
+        select(Interview)
+        .where(Interview.candidate_id == candidate_id)
+        .order_by(Interview.scheduled_date.desc())
+    )
+    interviews = [
+        InterviewResponse(
+            id=i.id,
+            candidate_id=i.candidate_id,
+            candidate_name=i.candidate_name,
+            candidate_email=i.candidate_email,
+            candidate_phone=i.candidate_phone,
+            zoho_candidate_id=i.zoho_candidate_id,
+            zoho_event_id=i.zoho_event_id,
+            scheduled_date=i.scheduled_date,
+            duration_minutes=i.duration_minutes,
+            interview_type=i.interview_type,
+            status=i.status,
+            is_no_show=i.is_no_show,
+            no_show_count=i.no_show_count,
+            reschedule_count=i.reschedule_count,
+            outcome=i.outcome,
+            interviewer=i.interviewer,
+            notes=i.notes,
+            teams_meeting_link=i.teams_meeting_link,
+            created_at=i.created_at
+        )
+        for i in interviews_result.scalars().all()
+    ]
+
+    # Fetch related tasks
+    tasks_result = await db.execute(
+        select(Task)
+        .where(Task.candidate_id == candidate_id)
+        .order_by(Task.created_at.desc())
+    )
+    tasks = [
+        TaskResponse(
+            id=t.id,
+            title=t.title,
+            description=t.description,
+            task_type=t.task_type,
+            priority=t.priority,
+            candidate_id=t.candidate_id,
+            candidate_name=t.candidate_name,
+            zoho_task_id=t.zoho_task_id,
+            status=t.status,
+            assigned_to=t.assigned_to,
+            created_by=t.created_by,
+            due_date=t.due_date,
+            completed_at=t.completed_at,
+            created_at=t.created_at
+        )
+        for t in tasks_result.scalars().all()
+    ]
+
+    return CandidateDetailResponse(
+        id=candidate.id,
+        zoho_id=candidate.zoho_id,
+        zoho_module=candidate.zoho_module,
+        zoho_url=get_crm_record_url(candidate.zoho_module, candidate.zoho_id),
+        first_name=candidate.first_name,
+        last_name=candidate.last_name,
+        full_name=candidate.full_name,
+        email=candidate.email,
+        phone=candidate.phone,
+        mobile=candidate.mobile,
+        whatsapp_number=candidate.whatsapp_number,
+        city=candidate.city,
+        state=candidate.state,
+        country=candidate.country,
+        service_location=candidate.service_location,
+        candidate_status=candidate.candidate_status,
+        stage=candidate.stage,
+        tier=candidate.tier,
+        language=candidate.language,
+        languages=candidate.languages,
+        candidate_owner=candidate.candidate_owner,
+        recruitment_owner=candidate.recruitment_owner,
+        assigned_client=candidate.assigned_client,
+        agreed_rate=candidate.agreed_rate,
+        language_assessment_passed=candidate.language_assessment_passed,
+        language_assessment_grader=candidate.language_assessment_grader,
+        language_assessment_date=candidate.language_assessment_date,
+        bgv_passed=candidate.bgv_passed,
+        system_specs_approved=candidate.system_specs_approved,
+        offer_accepted=candidate.offer_accepted,
+        offer_accepted_date=candidate.offer_accepted_date,
+        training_accepted=candidate.training_accepted,
+        training_status=candidate.training_status,
+        training_start_date=candidate.training_start_date,
+        training_end_date=candidate.training_end_date,
+        alfa_one_onboarded=candidate.alfa_one_onboarded,
+        next_followup=candidate.next_followup,
+        followup_reason=candidate.followup_reason,
+        recontact_date=candidate.recontact_date,
+        last_activity_date=candidate.last_activity_date,
+        last_communication_date=candidate.last_communication_date,
+        days_in_stage=candidate.days_in_stage,
+        stage_entered_date=candidate.stage_entered_date,
+        is_unresponsive=candidate.is_unresponsive,
+        has_pending_documents=candidate.has_pending_documents,
+        needs_training=candidate.needs_training,
+        disqualification_reason=candidate.disqualification_reason,
+        candidate_source=candidate.candidate_source,
+        created_at=candidate.created_at,
+        updated_at=candidate.updated_at,
+        zoho_created_time=candidate.zoho_created_time,
+        notes=notes,
+        interviews=interviews,
+        tasks=tasks
+    )
+
+
+# ============================================
+# Candidate Notes
+# ============================================
+
+@router.get("/{candidate_id}/notes", response_model=List[CandidateNoteResponse])
+async def get_candidate_notes(
+    candidate_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all notes for a candidate"""
+    # Verify candidate exists
+    candidate_result = await db.execute(
+        select(CandidateCache.id).where(CandidateCache.id == candidate_id)
+    )
+    if not candidate_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    result = await db.execute(
+        select(CandidateNote)
+        .where(CandidateNote.candidate_id == candidate_id)
+        .order_by(CandidateNote.created_at.desc())
+    )
+    notes = result.scalars().all()
+
+    return [
+        CandidateNoteResponse(
+            id=n.id,
+            candidate_id=n.candidate_id,
+            content=n.content,
+            note_type=n.note_type,
+            created_by=n.created_by,
+            created_at=n.created_at,
+            updated_at=n.updated_at
+        )
+        for n in notes
+    ]
+
+
+@router.post("/{candidate_id}/notes", response_model=CandidateNoteResponse)
+async def create_candidate_note(
+    candidate_id: int,
+    note: CandidateNoteCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new note for a candidate"""
+    # Verify candidate exists
+    candidate_result = await db.execute(
+        select(CandidateCache.id).where(CandidateCache.id == candidate_id)
+    )
+    if not candidate_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    new_note = CandidateNote(
+        candidate_id=candidate_id,
+        content=note.content,
+        note_type=note.note_type,
+        created_by=note.created_by
+    )
+    db.add(new_note)
+    await db.commit()
+    await db.refresh(new_note)
+
+    return CandidateNoteResponse(
+        id=new_note.id,
+        candidate_id=new_note.candidate_id,
+        content=new_note.content,
+        note_type=new_note.note_type,
+        created_by=new_note.created_by,
+        created_at=new_note.created_at,
+        updated_at=new_note.updated_at
+    )
+
+
+@router.delete("/{candidate_id}/notes/{note_id}", response_model=SuccessResponse)
+async def delete_candidate_note(
+    candidate_id: int,
+    note_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a candidate note"""
+    result = await db.execute(
+        select(CandidateNote).where(
+            and_(
+                CandidateNote.id == note_id,
+                CandidateNote.candidate_id == candidate_id
+            )
+        )
+    )
+    note = result.scalar_one_or_none()
+
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    await db.delete(note)
+    await db.commit()
+
+    return SuccessResponse(message="Note deleted successfully")
 
 
 @router.get("/zoho/{zoho_id}", response_model=CandidateResponse)

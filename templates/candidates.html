@@ -447,7 +447,7 @@
                         <template x-for="candidate in stage.candidates" :key="candidate.id">
                             <div
                                 class="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                                @click="openCandidateDetail(candidate)"
+                                @click="goToDetail(candidate.id)"
                             >
                                 <!-- Name and Status Indicators -->
                                 <div class="flex items-start justify-between mb-2">
@@ -558,7 +558,7 @@
             </thead>
             <tbody class="divide-y">
                 <template x-for="candidate in candidates" :key="candidate.id">
-                    <tr class="hover:bg-gray-50 cursor-pointer" @click="openCandidateDetail(candidate)">
+                    <tr class="hover:bg-gray-50 cursor-pointer" @click="goToDetail(candidate.id)">
                         <td class="px-4 py-3">
                             <span class="font-medium text-gray-800" x-text="candidate.full_name"></span>
                         </td>
@@ -986,6 +986,10 @@ function candidatesApp() {
             } catch (error) {
                 console.error('Failed to fetch candidates:', error);
             }
+        },
+
+        goToDetail(candidateId) {
+            window.location.href = `/candidates/${candidateId}`;
         },
 
         openCandidateDetail(candidate) {

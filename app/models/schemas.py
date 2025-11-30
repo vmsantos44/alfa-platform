@@ -57,6 +57,124 @@ class CandidateSummary(BaseModel):
 
 
 # ============================================
+# Candidate Note Schemas
+# ============================================
+
+class CandidateNoteBase(BaseModel):
+    """Base note fields"""
+    content: str
+    note_type: str = "general"
+
+
+class CandidateNoteCreate(CandidateNoteBase):
+    """Create a new note"""
+    created_by: Optional[str] = None
+
+
+class CandidateNoteResponse(CandidateNoteBase):
+    """Note response"""
+    id: int
+    candidate_id: int
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================
+# Candidate Detail Schema (Full profile)
+# ============================================
+
+class CandidateDetailResponse(BaseModel):
+    """Full candidate detail with all fields"""
+    id: int
+    zoho_id: str
+    zoho_module: str = "Leads"
+    zoho_url: Optional[str] = None
+
+    # Basic info
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    mobile: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+
+    # Location
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    service_location: Optional[str] = None
+
+    # Pipeline info
+    candidate_status: Optional[str] = None
+    stage: str
+    tier: Optional[str] = None
+
+    # Languages
+    language: Optional[str] = None
+    languages: Optional[str] = None
+
+    # Assignment
+    candidate_owner: Optional[str] = None
+    recruitment_owner: Optional[str] = None
+    assigned_client: Optional[str] = None
+    agreed_rate: Optional[str] = None
+
+    # Assessment tracking
+    language_assessment_passed: Optional[bool] = None
+    language_assessment_grader: Optional[str] = None
+    language_assessment_date: Optional[datetime] = None
+    bgv_passed: Optional[bool] = None
+    system_specs_approved: Optional[bool] = None
+
+    # Offer & Training
+    offer_accepted: Optional[bool] = None
+    offer_accepted_date: Optional[datetime] = None
+    training_accepted: Optional[bool] = None
+    training_status: Optional[str] = None
+    training_start_date: Optional[datetime] = None
+    training_end_date: Optional[datetime] = None
+    alfa_one_onboarded: Optional[bool] = None
+
+    # Follow-up tracking
+    next_followup: Optional[datetime] = None
+    followup_reason: Optional[str] = None
+    recontact_date: Optional[datetime] = None
+
+    # Activity tracking
+    last_activity_date: Optional[datetime] = None
+    last_communication_date: Optional[datetime] = None
+    days_in_stage: int = 0
+    stage_entered_date: Optional[datetime] = None
+
+    # Status flags
+    is_unresponsive: bool = False
+    has_pending_documents: bool = False
+    needs_training: bool = False
+    disqualification_reason: Optional[str] = None
+
+    # Source
+    candidate_source: Optional[str] = None
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+    zoho_created_time: Optional[datetime] = None
+
+    # Related data
+    notes: List["CandidateNoteResponse"] = []
+    interviews: List["InterviewResponse"] = []
+    tasks: List["TaskResponse"] = []
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================
 # Action Alert Schemas
 # ============================================
 
@@ -282,3 +400,7 @@ class ErrorResponse(BaseModel):
     success: bool = False
     error: str
     detail: Optional[str] = None
+
+
+# Rebuild models to resolve forward references
+CandidateDetailResponse.model_rebuild()
