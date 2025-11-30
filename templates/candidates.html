@@ -129,20 +129,22 @@
                 </div>
             </div>
 
-            <!-- Date Added Range -->
+            <!-- Last Activity Date Range -->
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Date Added</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Last Activity</label>
                 <div class="flex gap-2">
                     <input
                         type="date"
                         x-model="filters.dateFrom"
                         @change="applyFilters()"
+                        placeholder="From"
                         class="w-1/2 px-3 py-2 border rounded-lg text-sm"
                     >
                     <input
                         type="date"
                         x-model="filters.dateTo"
                         @change="applyFilters()"
+                        placeholder="To"
                         class="w-1/2 px-3 py-2 border rounded-lg text-sm"
                     >
                 </div>
