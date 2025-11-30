@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from app.config import HOST, PORT, DEBUG
 from app.core.database import init_db
 from app.routes import chat, api, webhooks, dashboard, candidates, sync, interviews
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 # Template directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,9 +35,15 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_db()
 
+    # Start background scheduler for auto-sync (every 30 minutes)
+    print("  Starting auto-sync scheduler...")
+    start_scheduler(interval_minutes=30, run_immediately=False)
+
     print("=" * 50)
     yield
     # Shutdown
+    print("Stopping scheduler...")
+    stop_scheduler()
     print("Alfa Operations Platform shutting down...")
 
 

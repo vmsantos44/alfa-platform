@@ -2,11 +2,90 @@
 Data Synchronization API endpoints
 Sync data between Zoho CRM and local database
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from app.services.sync import SyncService
+from app.services.scheduler import get_scheduler
 from app.models.schemas import SyncStatus, SuccessResponse
 
 router = APIRouter()
+
+
+# ============================================
+# Scheduler Control Endpoints
+# ============================================
+
+@router.get("/scheduler/status")
+async def get_scheduler_status():
+    """Get the current status of the auto-sync scheduler"""
+    scheduler = get_scheduler()
+    return scheduler.get_status()
+
+
+@router.post("/scheduler/start")
+async def start_auto_sync(
+    interval_minutes: int = Query(30, ge=5, le=1440, description="Sync interval in minutes (5-1440)")
+):
+    """Start the auto-sync scheduler"""
+    scheduler = get_scheduler()
+    status = scheduler.get_status()
+
+    if status["is_running"]:
+        return {"message": "Scheduler already running", **status}
+
+    scheduler.start(interval_minutes=interval_minutes, run_immediately=False)
+    return {"message": f"Scheduler started with {interval_minutes}-minute interval", **scheduler.get_status()}
+
+
+@router.post("/scheduler/stop")
+async def stop_auto_sync():
+    """Stop the auto-sync scheduler"""
+    scheduler = get_scheduler()
+    status = scheduler.get_status()
+
+    if not status["is_running"]:
+        return {"message": "Scheduler not running", **status}
+
+    scheduler.stop()
+    return {"message": "Scheduler stopped", **scheduler.get_status()}
+
+
+@router.post("/scheduler/pause")
+async def pause_auto_sync():
+    """Pause the auto-sync scheduler (keeps schedule but doesn't run)"""
+    scheduler = get_scheduler()
+    scheduler.pause()
+    return {"message": "Scheduler paused", **scheduler.get_status()}
+
+
+@router.post("/scheduler/resume")
+async def resume_auto_sync():
+    """Resume the auto-sync scheduler"""
+    scheduler = get_scheduler()
+    scheduler.resume()
+    return {"message": "Scheduler resumed", **scheduler.get_status()}
+
+
+@router.post("/scheduler/trigger")
+async def trigger_sync_now():
+    """Manually trigger a sync immediately"""
+    scheduler = get_scheduler()
+    result = await scheduler.trigger_sync_now()
+    return result
+
+
+@router.put("/scheduler/interval")
+async def update_sync_interval(
+    interval_minutes: int = Query(..., ge=5, le=1440, description="New sync interval in minutes (5-1440)")
+):
+    """Update the sync interval"""
+    scheduler = get_scheduler()
+    scheduler.update_interval(interval_minutes)
+    return {"message": f"Interval updated to {interval_minutes} minutes", **scheduler.get_status()}
+
+
+# ============================================
+# Manual Sync Endpoints
+# ============================================
 
 
 @router.post("/candidates")
