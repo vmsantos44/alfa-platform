@@ -29,7 +29,7 @@ class AlertPriority(str, enum.Enum):
 
 class CandidateStage(str, enum.Enum):
     """Recruitment pipeline stages"""
-    NEW_LEAD = "New Lead"
+    NEW_CANDIDATE = "New Candidate"
     SCREENING = "Screening"
     INTERVIEW_SCHEDULED = "Interview Scheduled"
     INTERVIEW_COMPLETED = "Interview Completed"

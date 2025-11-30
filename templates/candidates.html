@@ -36,7 +36,7 @@
                 class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
             >
                 <option value="">All Stages</option>
-                <option value="New Lead">New Lead</option>
+                <option value="New Candidate">New Candidate</option>
                 <option value="Screening">Screening</option>
                 <option value="Interview Scheduled">Interview Scheduled</option>
                 <option value="Interview Completed">Interview Completed</option>
@@ -322,7 +322,7 @@
                             class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
                         >
                             <option value="">Select new stage...</option>
-                            <option value="New Lead">New Lead</option>
+                            <option value="New Candidate">New Candidate</option>
                             <option value="Screening">Screening</option>
                             <option value="Interview Scheduled">Interview Scheduled</option>
                             <option value="Interview Completed">Interview Completed</option>
@@ -379,7 +379,7 @@ function candidatesApp() {
             pendingDocs: false
         },
         stages: [
-            'New Lead',
+            'New Candidate',
             'Screening',
             'Interview Scheduled',
             'Interview Completed',
@@ -498,7 +498,7 @@ function candidatesApp() {
 
         getStageHeaderColor(stage) {
             const colors = {
-                'New Lead': 'bg-blue-500',
+                'New Candidate': 'bg-blue-500',
                 'Screening': 'bg-yellow-500',
                 'Interview Scheduled': 'bg-orange-500',
                 'Interview Completed': 'bg-purple-500',
@@ -513,7 +513,7 @@ function candidatesApp() {
 
         getStageBadgeColor(stage) {
             const colors = {
-                'New Lead': 'bg-blue-100 text-blue-700',
+                'New Candidate': 'bg-blue-100 text-blue-700',
                 'Screening': 'bg-yellow-100 text-yellow-700',
                 'Interview Scheduled': 'bg-orange-100 text-orange-700',
                 'Interview Completed': 'bg-purple-100 text-purple-700',

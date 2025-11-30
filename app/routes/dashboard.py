@@ -154,7 +154,7 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
     total_candidates = total.scalar() or 0
 
     # Pipeline stage counts
-    stages = ["New Lead", "Screening", "Interview Scheduled", "Assessment", "Onboarding", "Active"]
+    stages = ["New Candidate", "Screening", "Interview Scheduled", "Assessment", "Onboarding", "Active"]
     stage_counts = {}
     for stage in stages:
         count_result = await db.execute(
@@ -168,7 +168,7 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
         scheduled_today_count=scheduled_today,
         active_interpreters_count=active_interpreters,
         total_candidates=total_candidates,
-        new_leads=stage_counts.get("New Lead", 0),
+        new_leads=stage_counts.get("New Candidate", 0),
         screening=stage_counts.get("Screening", 0),
         interview=stage_counts.get("Interview Scheduled", 0),
         assessment=stage_counts.get("Assessment", 0),
@@ -180,7 +180,7 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
 async def get_pipeline_overview(db: AsyncSession) -> List[PipelineStage]:
     """Get pipeline stages with counts"""
     stages = [
-        "New Lead",
+        "New Candidate",
         "Screening",
         "Interview Scheduled",
         "Interview Completed",

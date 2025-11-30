@@ -35,7 +35,7 @@ async def get_pipeline(
     Optionally include candidate details.
     """
     stages = [
-        "New Lead",
+        "New Candidate",
         "Screening",
         "Interview Scheduled",
         "Interview Completed",
@@ -314,7 +314,7 @@ async def move_candidate_stage(
 ):
     """Move candidate to a new pipeline stage"""
     valid_stages = [
-        "New Lead", "Screening", "Interview Scheduled", "Interview Completed",
+        "New Candidate", "Screening", "Interview Scheduled", "Interview Completed",
         "Assessment", "Onboarding", "Active", "Inactive", "Rejected"
     ]
 
