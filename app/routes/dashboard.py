@@ -437,3 +437,126 @@ async def generate_alerts(db: AsyncSession = Depends(get_db)):
         await db.refresh(alert)
 
     return [ActionAlertResponse.model_validate(a) for a in alerts_created]
+
+
+# ============================================
+# Analytics Endpoints for Charts
+# ============================================
+
+@router.get("/analytics/by-language")
+async def get_candidates_by_language(
+    limit: int = Query(10, description="Top N languages"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get candidate counts by primary language for chart"""
+    result = await db.execute(
+        select(CandidateCache.language, func.count(CandidateCache.id).label('count'))
+        .where(CandidateCache.language.isnot(None))
+        .group_by(CandidateCache.language)
+        .order_by(func.count(CandidateCache.id).desc())
+        .limit(limit)
+    )
+
+    data = [{"language": row[0], "count": row[1]} for row in result.all()]
+    return {"data": data}
+
+
+@router.get("/analytics/by-source")
+async def get_candidates_by_source(
+    limit: int = Query(10, description="Top N sources"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get candidate counts by source for chart"""
+    result = await db.execute(
+        select(CandidateCache.candidate_source, func.count(CandidateCache.id).label('count'))
+        .where(CandidateCache.candidate_source.isnot(None))
+        .group_by(CandidateCache.candidate_source)
+        .order_by(func.count(CandidateCache.id).desc())
+        .limit(limit)
+    )
+
+    data = [{"source": row[0] or "Unknown", "count": row[1]} for row in result.all()]
+    return {"data": data}
+
+
+@router.get("/analytics/by-tier")
+async def get_candidates_by_tier(db: AsyncSession = Depends(get_db)):
+    """Get candidate counts by tier level for chart"""
+    result = await db.execute(
+        select(CandidateCache.tier, func.count(CandidateCache.id).label('count'))
+        .where(CandidateCache.tier.isnot(None))
+        .group_by(CandidateCache.tier)
+        .order_by(CandidateCache.tier)
+    )
+
+    data = [{"tier": row[0], "count": row[1]} for row in result.all()]
+    return {"data": data}
+
+
+@router.get("/analytics/by-owner")
+async def get_candidates_by_owner(
+    limit: int = Query(10, description="Top N owners"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get candidate counts by recruitment owner for chart"""
+    result = await db.execute(
+        select(CandidateCache.candidate_owner, func.count(CandidateCache.id).label('count'))
+        .where(CandidateCache.candidate_owner.isnot(None))
+        .group_by(CandidateCache.candidate_owner)
+        .order_by(func.count(CandidateCache.id).desc())
+        .limit(limit)
+    )
+
+    data = [{"owner": row[0], "count": row[1]} for row in result.all()]
+    return {"data": data}
+
+
+@router.get("/analytics/pipeline-funnel")
+async def get_pipeline_funnel(db: AsyncSession = Depends(get_db)):
+    """Get pipeline funnel data (active stages only, ordered)"""
+    stages = [
+        "New Candidate",
+        "Screening",
+        "Interview Scheduled",
+        "Interview Completed",
+        "Assessment",
+        "Onboarding",
+        "Active"
+    ]
+
+    data = []
+    for stage in stages:
+        result = await db.execute(
+            select(func.count(CandidateCache.id))
+            .where(CandidateCache.stage == stage)
+        )
+        count = result.scalar() or 0
+        data.append({"stage": stage, "count": count})
+
+    return {"data": data}
+
+
+@router.get("/analytics/recent-activity")
+async def get_recent_activity(
+    limit: int = Query(10, description="Number of recent items"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get recent candidate activity for activity feed"""
+    result = await db.execute(
+        select(CandidateCache)
+        .where(CandidateCache.last_activity_date.isnot(None))
+        .order_by(CandidateCache.last_activity_date.desc())
+        .limit(limit)
+    )
+
+    candidates = result.scalars().all()
+    data = [{
+        "id": c.id,
+        "name": c.full_name,
+        "stage": c.stage,
+        "activity_date": c.last_activity_date.isoformat() if c.last_activity_date else None,
+        "tier": c.tier,
+        "language": c.language
+    } for c in candidates]
+
+    return {"data": data}
