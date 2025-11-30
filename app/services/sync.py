@@ -162,16 +162,17 @@ class SyncService:
                             per_page=per_page,
                             fields=[
                                 "id", "First_Name", "Last_Name", "Email", "Phone", "Mobile",
-                                "Candidate_Status", "Tier_Level", "Language", "Other_spoken_language_s",
+                                "Lead_Status", "Stage", "Tier_Level", "Language", "Other_spoken_language_s",
                                 "City", "State", "Country", "Service_Location",
-                                "Candidate_Owner", "Candidate_Recruitment_Owner", "Client", "Agreed_Rate",
-                                "Language_Assesment_Pased", "Language_Assessment_Grader",
-                                "Language_Assessment_Completion_Date", "BGV_Passed", "Systems_Specs_Approved",
+                                "Owner", "Candidate_Recruitment_Owner", "Client", "Agreed_Rate",
+                                "Language_Assesment", "Language_Assessment_Graded_By",
+                                "Language_Assessment_Completion_Date", "BGV_Passed", "Systems_Check_Approved",
                                 "Offer_Accepted", "Offer_accepted_date", "Training_Accepted",
                                 "Training_Status", "Training_Start_Date", "Training_End_Date",
-                                "Alfa_One_Fully_Onboarded", "Next_Followup", "Followup_Reason",
+                                "Alfa_One_Fully_Onboarded", "abrsmartfollowupextensionforzohocrm__Next_Followup",
+                                "abrsmartfollowupextensionforzohocrm__Followup_Reason",
                                 "Recontact_Date", "Last_Activity_Time", "Modified_Time",
-                                "Candidate_Source", "Disqualification_Reason", "WhatsApp_Number"
+                                "Lead_Source", "Disqualification_Reason", "WhatsApp_Number"
                             ]
                         )
 
@@ -286,9 +287,9 @@ class SyncService:
         last_name = to_string(data.get("Last_Name")) or ""
         full_name = f"{first_name} {last_name}".strip() or "Unknown"
 
-        # Get candidate status and map to stage
-        candidate_status = to_string(data.get("Candidate_Status")) or ""
-        stage = cls.map_status_to_stage(candidate_status)
+        # Get lead status and map to stage
+        lead_status = to_string(data.get("Lead_Status")) or ""
+        stage = cls.map_status_to_stage(lead_status)
 
         # Build languages string
         primary_lang = to_string(data.get("Language")) or ""
@@ -300,7 +301,7 @@ class SyncService:
         # Parse dates
         modified_time = parse_date(data.get("Modified_Time"))
         last_activity = parse_date(data.get("Last_Activity_Time"))
-        next_followup = parse_date(data.get("Next_Followup"))
+        next_followup = parse_date(data.get("abrsmartfollowupextensionforzohocrm__Next_Followup"))
         recontact_date = parse_date(data.get("Recontact_Date"))
         offer_date = parse_date(data.get("Offer_accepted_date"))
         training_start = parse_date(data.get("Training_Start_Date"))
@@ -308,10 +309,11 @@ class SyncService:
         la_date = parse_date(data.get("Language_Assessment_Completion_Date"))
 
         # Get owner names
-        owner_data = data.get("Candidate_Owner", {})
+        owner_data = data.get("Owner", {})
         candidate_owner = owner_data.get("name") if isinstance(owner_data, dict) else str(owner_data) if owner_data else None
 
-        recruitment_owner = data.get("Candidate_Recruitment_Owner", "")
+        recruitment_owner_data = data.get("Candidate_Recruitment_Owner", {})
+        recruitment_owner = recruitment_owner_data.get("name") if isinstance(recruitment_owner_data, dict) else to_string(recruitment_owner_data)
 
         if existing:
             # Update existing record
@@ -330,11 +332,11 @@ class SyncService:
             existing.country = data.get("Country")
             existing.service_location = data.get("Service_Location")
 
-            existing.candidate_status = candidate_status
+            existing.candidate_status = lead_status
             existing.stage = stage
-            existing.tier = data.get("Tier_Level")
+            existing.tier = to_string(data.get("Tier_Level"))
 
-            existing.language = data.get("Language")
+            existing.language = to_string(data.get("Language"))
             existing.languages = languages
 
             existing.candidate_owner = candidate_owner
@@ -342,28 +344,28 @@ class SyncService:
             existing.assigned_client = to_string(data.get("Client"))
             existing.agreed_rate = to_string(data.get("Agreed_Rate"))
 
-            existing.language_assessment_passed = parse_bool(data.get("Language_Assesment_Pased"))
-            existing.language_assessment_grader = data.get("Language_Assessment_Grader")
+            existing.language_assessment_passed = parse_bool(data.get("Language_Assesment"))
+            existing.language_assessment_grader = to_string(data.get("Language_Assessment_Graded_By"))
             existing.language_assessment_date = la_date
             existing.bgv_passed = parse_bool(data.get("BGV_Passed"))
-            existing.system_specs_approved = parse_bool(data.get("Systems_Specs_Approved"))
+            existing.system_specs_approved = parse_bool(data.get("Systems_Check_Approved"))
 
             existing.offer_accepted = parse_bool(data.get("Offer_Accepted"))
             existing.offer_accepted_date = offer_date
             existing.training_accepted = parse_bool(data.get("Training_Accepted"))
-            existing.training_status = data.get("Training_Status")
+            existing.training_status = to_string(data.get("Training_Status"))
             existing.training_start_date = training_start
             existing.training_end_date = training_end
             existing.alfa_one_onboarded = parse_bool(data.get("Alfa_One_Fully_Onboarded"))
 
             existing.next_followup = next_followup
-            existing.followup_reason = data.get("Followup_Reason")
+            existing.followup_reason = to_string(data.get("abrsmartfollowupextensionforzohocrm__Followup_Reason"))
             existing.recontact_date = recontact_date
 
             existing.last_activity_date = last_activity
             existing.zoho_modified_time = modified_time
-            existing.candidate_source = data.get("Candidate_Source")
-            existing.disqualification_reason = data.get("Disqualification_Reason")
+            existing.candidate_source = to_string(data.get("Lead_Source"))
+            existing.disqualification_reason = to_string(data.get("Disqualification_Reason"))
 
             # Update stage tracking if stage changed
             if old_stage != stage:
@@ -371,7 +373,7 @@ class SyncService:
                 existing.days_in_stage = 0
 
             # Determine flags based on status
-            status_lower = (candidate_status or "").lower()
+            status_lower = (lead_status or "").lower()
             existing.needs_training = "training" in status_lower and "completed" not in status_lower
             existing.has_pending_documents = "document" in status_lower or "id verification" in status_lower
 
@@ -398,7 +400,7 @@ class SyncService:
                 country=to_string(data.get("Country")),
                 service_location=to_string(data.get("Service_Location")),
 
-                candidate_status=candidate_status,
+                candidate_status=lead_status,
                 stage=stage,
                 tier=to_string(data.get("Tier_Level")),
 
@@ -410,11 +412,11 @@ class SyncService:
                 assigned_client=to_string(data.get("Client")),
                 agreed_rate=to_string(data.get("Agreed_Rate")),
 
-                language_assessment_passed=parse_bool(data.get("Language_Assesment_Pased")),
-                language_assessment_grader=to_string(data.get("Language_Assessment_Grader")),
+                language_assessment_passed=parse_bool(data.get("Language_Assesment")),
+                language_assessment_grader=to_string(data.get("Language_Assessment_Graded_By")),
                 language_assessment_date=la_date,
                 bgv_passed=parse_bool(data.get("BGV_Passed")),
-                system_specs_approved=parse_bool(data.get("Systems_Specs_Approved")),
+                system_specs_approved=parse_bool(data.get("Systems_Check_Approved")),
 
                 offer_accepted=parse_bool(data.get("Offer_Accepted")),
                 offer_accepted_date=offer_date,
@@ -425,18 +427,18 @@ class SyncService:
                 alfa_one_onboarded=parse_bool(data.get("Alfa_One_Fully_Onboarded")),
 
                 next_followup=next_followup,
-                followup_reason=to_string(data.get("Followup_Reason")),
+                followup_reason=to_string(data.get("abrsmartfollowupextensionforzohocrm__Followup_Reason")),
                 recontact_date=recontact_date,
 
                 last_activity_date=last_activity,
                 zoho_modified_time=modified_time,
-                candidate_source=to_string(data.get("Candidate_Source")),
+                candidate_source=to_string(data.get("Lead_Source")),
                 disqualification_reason=to_string(data.get("Disqualification_Reason")),
 
                 stage_entered_date=datetime.utcnow(),
                 days_in_stage=0,
-                needs_training="training" in (candidate_status or "").lower() and "completed" not in (candidate_status or "").lower(),
-                has_pending_documents="document" in (candidate_status or "").lower(),
+                needs_training="training" in (lead_status or "").lower() and "completed" not in (lead_status or "").lower(),
+                has_pending_documents="document" in (lead_status or "").lower(),
                 last_synced=datetime.utcnow()
             )
             db.add(new_candidate)
