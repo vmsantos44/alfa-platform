@@ -2,6 +2,7 @@
 API router - CRM and integration endpoints
 """
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from typing import List, Optional
 
 from app.config import get_settings
@@ -11,6 +12,16 @@ from app.integrations.zoho.mail import (
     get_contact_emails,
     search_emails
 )
+
+
+class SendEmailRequest(BaseModel):
+    """Request body for sending email"""
+    to: List[str]
+    subject: str
+    content: str
+    cc: Optional[List[str]] = None
+    bcc: Optional[List[str]] = None
+    is_html: bool = True
 
 router = APIRouter()
 
@@ -114,23 +125,26 @@ async def get_contact_email_history(
 
 
 @router.post("/mail/send")
-async def send_mail(
-    to: List[str],
-    subject: str,
-    content: str,
-    cc: Optional[List[str]] = None,
-    bcc: Optional[List[str]] = None,
-    is_html: bool = True
-):
-    """Send an email"""
+async def send_mail(request: SendEmailRequest):
+    """
+    Send an email via Zoho Mail.
+
+    Request body:
+    - to: List of recipient email addresses
+    - subject: Email subject
+    - content: Email body (HTML or plain text)
+    - cc: Optional list of CC recipients
+    - bcc: Optional list of BCC recipients
+    - is_html: Whether content is HTML (default: true)
+    """
     try:
         result = await send_email(
-            to=to,
-            subject=subject,
-            content=content,
-            cc=cc,
-            bcc=bcc,
-            is_html=is_html
+            to=request.to,
+            subject=request.subject,
+            content=request.content,
+            cc=request.cc,
+            bcc=request.bcc,
+            is_html=request.is_html
         )
         return {"status": "sent", "result": result}
     except Exception as e:
