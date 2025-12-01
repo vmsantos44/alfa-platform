@@ -8,7 +8,6 @@ from app.config import get_settings
 from app.integrations.zoho.mail import (
     get_mail_api,
     send_email,
-    get_emails,
     get_contact_emails,
     search_emails
 )
