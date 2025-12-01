@@ -103,6 +103,65 @@ class ZohoAPI:
         return {"Authorization": f"Zoho-oauthtoken {token}"}
 
     @api_retry
+    async def get_records(
+        self,
+        module: str,
+        page: int = 1,
+        per_page: int = 200,
+        fields: Optional[List[str]] = None,
+        criteria: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get records from a Zoho CRM module with pagination.
+
+        Args:
+            module: CRM module name (Leads, Contacts, etc.)
+            page: Page number (starts at 1)
+            per_page: Records per page (max 200)
+            fields: Optional list of field names to retrieve
+            criteria: Optional COQL criteria string
+
+        Returns:
+            Dict with 'data' list and 'info' pagination details
+        """
+        headers = await self._get_headers()
+
+        params = {
+            "page": page,
+            "per_page": min(per_page, 200)
+        }
+
+        if fields:
+            params["fields"] = ",".join(fields)
+
+        try:
+            if criteria:
+                # Use search API with criteria
+                response = await self.client.get(
+                    f"{self.settings.zoho_api_domain}/crm/v2/{module}/search",
+                    headers=headers,
+                    params={"criteria": criteria, **params},
+                )
+            else:
+                # Use regular get records API
+                response = await self.client.get(
+                    f"{self.settings.zoho_api_domain}/crm/v2/{module}",
+                    headers=headers,
+                    params=params,
+                )
+
+            # Handle 204 No Content (no records)
+            if response.status_code == 204:
+                return {"data": [], "info": {"more_records": False}}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, 'response') and e.response and e.response.status_code == 204:
+                return {"data": [], "info": {"more_records": False}}
+            raise Exception(f"Failed to get records from {module}: {str(e)}")
+
+    @api_retry
     async def search_contacts(self, search_term: str) -> Dict[str, Any]:
         """Search for contacts by name or email"""
         headers = await self._get_headers()
@@ -169,6 +228,55 @@ class ZohoAPI:
             raise Exception(f"Failed to get notes: {str(e)}")
 
     @api_retry
+    async def get_all_notes(
+        self,
+        page: int = 1,
+        per_page: int = 200,
+        modified_since: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get all notes from Zoho CRM Notes module.
+
+        Args:
+            page: Page number (starts at 1)
+            per_page: Records per page (max 200)
+            modified_since: ISO timestamp to fetch only notes modified after this time
+                           Format: 2024-01-01T00:00:00+00:00
+
+        Returns:
+            Dict with 'data' list and 'info' pagination details
+        """
+        headers = await self._get_headers()
+
+        # Add If-Modified-Since header for incremental sync
+        if modified_since:
+            headers["If-Modified-Since"] = modified_since
+
+        params = {
+            "page": page,
+            "per_page": min(per_page, 200),
+            "fields": "id,Note_Title,Note_Content,Parent_Id,$se_module,Owner,Created_Time,Modified_Time"
+        }
+
+        try:
+            response = await self.client.get(
+                f"{self.settings.zoho_api_domain}/crm/v2/Notes",
+                headers=headers,
+                params=params,
+            )
+
+            # Handle 204 No Content (no records) or 304 Not Modified
+            if response.status_code in (204, 304):
+                return {"data": [], "info": {"more_records": False}}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, "response") and e.response.status_code in (204, 304):
+                return {"data": [], "info": {"more_records": False}}
+            raise Exception(f"Failed to get all notes: {str(e)}")
+
+    @api_retry
     async def get_activities(self, module: str, record_id: str) -> Dict[str, Any]:
         """Get all activities (emails, calls, tasks, events) for a record"""
         headers = await self._get_headers()
@@ -185,6 +293,95 @@ class ZohoAPI:
             if hasattr(e, "response") and e.response.status_code in (204, 404):
                 return {"data": []}
             raise Exception(f"Failed to get activities: {str(e)}")
+
+    @api_retry
+    async def get_emails_for_record(
+        self,
+        module: str,
+        record_id: str,
+        page: int = 1,
+        per_page: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Get emails for a specific record from Zoho CRM.
+
+        Args:
+            module: CRM module (Leads, Contacts, etc.)
+            record_id: The record ID
+            page: Page number (starts at 1)
+            per_page: Records per page (max 200)
+
+        Returns:
+            Dict with 'data' list of emails and 'info' pagination details
+        """
+        headers = await self._get_headers()
+
+        params = {
+            "page": page,
+            "per_page": min(per_page, 200)
+        }
+
+        try:
+            response = await self.client.get(
+                f"{self.settings.zoho_api_domain}/crm/v2/{module}/{record_id}/Emails",
+                headers=headers,
+                params=params,
+            )
+
+            # Handle 204 No Content (no emails)
+            if response.status_code == 204:
+                return {"data": [], "info": {"more_records": False}}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, "response") and e.response:
+                if e.response.status_code in (204, 404):
+                    return {"data": [], "info": {"more_records": False}}
+            raise Exception(f"Failed to get emails for {module}/{record_id}: {str(e)}")
+
+    @api_retry
+    async def get_email_content(
+        self,
+        module: str,
+        record_id: str,
+        message_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get full content of a single email from Zoho CRM.
+
+        Args:
+            module: CRM module (Leads, Contacts, etc.)
+            record_id: The record ID
+            message_id: The email message ID
+
+        Returns:
+            Dict with email details including 'content' (HTML body)
+        """
+        headers = await self._get_headers()
+
+        try:
+            response = await self.client.get(
+                f"{self.settings.zoho_api_domain}/crm/v2/{module}/{record_id}/Emails/{message_id}",
+                headers=headers,
+            )
+
+            # Handle 204 No Content
+            if response.status_code == 204:
+                return {}
+
+            response.raise_for_status()
+            data = response.json()
+
+            # Zoho returns the email in 'email_related_list' array
+            emails = data.get("email_related_list", data.get("Emails", []))
+            return emails[0] if emails else data
+
+        except httpx.HTTPError as e:
+            if hasattr(e, "response") and e.response:
+                if e.response.status_code in (204, 404):
+                    return {}
+            raise Exception(f"Failed to get email content: {str(e)}")
 
     @api_retry
     async def get_attachments(self, module: str, record_id: str) -> Dict[str, Any]:
@@ -250,6 +447,96 @@ class ZohoAPI:
             return response.json()
         except httpx.HTTPError as e:
             raise Exception(f"Failed to send email: {str(e)}")
+
+    # =========================================================================
+    # ZOHO BOOKINGS API
+    # =========================================================================
+
+    @api_retry
+    async def get_bookings(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+        status: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Fetch appointments from Zoho Bookings.
+
+        Args:
+            from_date: Start date for appointments
+            to_date: End date for appointments
+            status: Filter by status (UPCOMING, COMPLETED, NO_SHOW, CANCEL, etc.)
+            page: Page number
+            per_page: Results per page (max 50)
+
+        Returns:
+            Dict with bookings data and pagination info
+
+        Status values: UPCOMING, CANCEL, ONGOING, PENDING, COMPLETED,
+                      NO_SHOW, PENDING_PAYMENT, PAYMENT_FAILURE
+        """
+        headers = await self._get_headers()
+        headers["Content-Type"] = "application/json"
+
+        # Format dates as expected by Zoho Bookings API: dd-MMM-yyyy
+        from_str = from_date.strftime("%d-%b-%Y")
+        to_str = to_date.strftime("%d-%b-%Y")
+
+        payload = {
+            "from_time": from_str,
+            "to_time": to_str,
+            "page": page,
+            "per_page": min(per_page, 50)
+        }
+
+        if status:
+            payload["status"] = status
+
+        try:
+            response = await self.client.post(
+                f"{self.settings.zoho_api_domain}/bookings/v1/json/fetchappointment",
+                headers=headers,
+                json=payload
+            )
+
+            # Handle 204 No Content
+            if response.status_code == 204:
+                return {"response": {"returnvalue": {"data": []}}, "next_page_available": False}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, 'response') and e.response:
+                error_text = e.response.text[:500] if e.response.text else ""
+                raise Exception(f"Failed to fetch bookings: {str(e)} - {error_text}")
+            raise Exception(f"Failed to fetch bookings: {str(e)}")
+
+    @api_retry
+    async def get_booking_by_id(self, booking_id: str) -> Dict[str, Any]:
+        """
+        Get a specific booking/appointment by ID.
+
+        Args:
+            booking_id: The booking ID (e.g., RE-12727)
+
+        Returns:
+            Dict with booking details
+        """
+        headers = await self._get_headers()
+        headers["Content-Type"] = "application/json"
+
+        try:
+            response = await self.client.post(
+                f"{self.settings.zoho_api_domain}/bookings/v1/json/getappointment",
+                headers=headers,
+                json={"booking_id": booking_id}
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise Exception(f"Failed to get booking {booking_id}: {str(e)}")
 
     async def close(self):
         """Close HTTP client"""
@@ -1195,12 +1482,12 @@ async def lookup_candidate(search_term: str) -> dict:
 async def workdrive_search(query: str, parent_id: Optional[str] = None, limit: int = 20) -> dict:
     """
     Search Zoho WorkDrive for documents.
-    
+
     Args:
         query: Search keyword
         parent_id: Optional folder ID to scope search
         limit: Maximum results (1-200)
-    
+
     Returns:
         dict with search results
     """
@@ -1208,7 +1495,7 @@ async def workdrive_search(query: str, parent_id: Optional[str] = None, limit: i
     params = {"query": query, "limit": min(limit, 200)}
     if parent_id:
         params["parentId"] = parent_id
-    
+
     try:
         response = await client.get("/api/workdrive-search", params=params)
         response.raise_for_status()
@@ -1218,3 +1505,11 @@ async def workdrive_search(query: str, parent_id: Optional[str] = None, limit: i
             "success": False,
             "error": f"CRM API error: {str(e)}"
         }
+
+
+# ============================================================================
+# ALIAS FOR BACKWARD COMPATIBILITY
+# ============================================================================
+
+# ZohoCRM is an alias for ZohoAPI (used by sync service)
+ZohoCRM = ZohoAPI

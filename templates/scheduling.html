@@ -1,0 +1,984 @@
+{% extends "base.html" %}
+
+{% block title %}Scheduling - Alfa Operations Platform{% endblock %}
+
+{% block nav_scheduling %}bg-gray-700{% endblock %}
+
+{% block page_title %}Scheduling{% endblock %}
+{% block page_subtitle %}Interview calendar and no-show tracking{% endblock %}
+
+{% block content %}
+<div x-data="schedulingApp()" x-init="init()">
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">Today</p>
+                    <p class="text-2xl font-bold text-gray-800" x-text="stats.today">0</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-indigo-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">This Week</p>
+                    <p class="text-2xl font-bold text-gray-800" x-text="stats.this_week">0</p>
+                </div>
+                <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">No-Shows (30d)</p>
+                    <p class="text-2xl font-bold text-red-600" x-text="stats.no_shows_this_month">0</p>
+                </div>
+                <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-500 mb-1">Completion Rate</p>
+                    <p class="text-2xl font-bold" :class="stats.completion_rate >= 50 ? 'text-green-600' : 'text-amber-600'" x-text="stats.completion_rate + '%'">0%</p>
+                </div>
+                <div class="w-12 h-12 rounded-full flex items-center justify-center" :class="stats.completion_rate >= 50 ? 'bg-green-100' : 'bg-amber-100'">
+                    <svg class="w-6 h-6" :class="stats.completion_rate >= 50 ? 'text-green-600' : 'text-amber-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Calendar Section -->
+        <div class="lg:col-span-2 bg-white rounded-xl shadow-sm">
+            <div class="p-4 border-b flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button @click="prevMonth()" class="p-2 hover:bg-gray-100 rounded-lg">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </button>
+                    <h2 class="text-lg font-semibold text-gray-800" x-text="monthName + ' ' + currentYear"></h2>
+                    <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-lg">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+                <button
+                    @click="showScheduleModal = true"
+                    class="px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Schedule Interview
+                </button>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="p-4">
+                <!-- Day Headers -->
+                <div class="grid grid-cols-7 gap-1 mb-2">
+                    <template x-for="day in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']">
+                        <div class="text-center text-sm font-medium text-gray-500 py-2" x-text="day"></div>
+                    </template>
+                </div>
+
+                <!-- Calendar Days -->
+                <div class="grid grid-cols-7 gap-1">
+                    <template x-for="day in calendarDays" :key="day.date">
+                        <div
+                            class="min-h-[80px] p-1 border rounded-lg cursor-pointer transition-colors"
+                            :class="{
+                                'bg-gray-50': !day.isCurrentMonth,
+                                'bg-blue-50 border-blue-300': day.isToday,
+                                'hover:bg-gray-100': day.isCurrentMonth && !day.isToday
+                            }"
+                            @click="openDayDetail(day)"
+                        >
+                            <div class="text-sm font-medium" :class="day.isCurrentMonth ? 'text-gray-800' : 'text-gray-400'" x-text="day.dayNumber"></div>
+                            <div class="space-y-1 mt-1">
+                                <template x-for="interview in (calendarData[day.date] || []).slice(0, 2)" :key="interview.id">
+                                    <div
+                                        class="text-xs px-1 py-0.5 rounded truncate"
+                                        :class="{
+                                            'bg-red-100 text-red-700': interview.is_no_show,
+                                            'bg-green-100 text-green-700': interview.status === 'completed',
+                                            'bg-blue-100 text-blue-700': interview.status === 'scheduled'
+                                        }"
+                                        x-text="interview.time + ' ' + interview.candidate_name"
+                                    ></div>
+                                </template>
+                                <div
+                                    x-show="(calendarData[day.date] || []).length > 2"
+                                    class="text-xs text-gray-500"
+                                    x-text="'+' + ((calendarData[day.date] || []).length - 2) + ' more'"
+                                ></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="space-y-6">
+
+            <!-- Today's Schedule -->
+            <div class="bg-white rounded-xl shadow-sm">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <h3 class="font-semibold text-gray-800">Today's Interviews</h3>
+                    </div>
+                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full" x-text="todayInterviews.length + ' scheduled'"></span>
+                </div>
+                <div class="p-4 max-h-[350px] overflow-y-auto">
+                    <div x-show="todayInterviews.length === 0" class="text-center py-8 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="text-sm">No interviews scheduled today</p>
+                    </div>
+                    <div class="space-y-3">
+                        <template x-for="interview in todayInterviews" :key="interview.id">
+                            <div class="flex items-center gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all">
+                                <div class="text-center min-w-[60px] py-2 px-3 bg-blue-50 rounded-lg">
+                                    <p class="text-sm font-bold text-blue-700" x-text="formatTime(interview.scheduled_date)"></p>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-gray-800 truncate" x-text="interview.candidate_name"></p>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded" x-text="interview.interview_type"></span>
+                                    </div>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button
+                                        @click="completeInterview(interview)"
+                                        class="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                        title="Mark Complete"
+                                    >
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="markNoShow(interview)"
+                                        class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Mark No-Show"
+                                    >
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No-Shows Needing Follow-up -->
+            <div class="bg-white rounded-xl shadow-sm">
+                <div class="p-4 border-b">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-semibold text-gray-800">No-Shows</h3>
+                        </div>
+                        <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium" x-text="noShowsTotal + ' total'"></span>
+                    </div>
+                    <!-- Filter Dropdown -->
+                    <div class="flex items-center gap-3">
+                        <select
+                            x-model="noShowFilter"
+                            @change="fetchNoShows()"
+                            class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300"
+                        >
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="">All time</option>
+                        </select>
+                        <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                            <input type="checkbox" x-model="noShowPendingOnly" @change="fetchNoShows()" class="rounded border-gray-300 text-red-600 focus:ring-red-500">
+                            <span>Pending only</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div x-show="noShowsLoading" class="text-center py-8 text-gray-400">
+                        <svg class="animate-spin h-8 w-8 mx-auto text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="text-sm mt-2">Loading...</p>
+                    </div>
+                    <div x-show="!noShowsLoading && noShows.length === 0" class="text-center py-8 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm">No pending no-shows</p>
+                    </div>
+                    <!-- Scrollable container with max height -->
+                    <div x-show="!noShowsLoading && noShows.length > 0" class="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                        <template x-for="interview in noShows" :key="interview.id">
+                            <div class="p-3 bg-gradient-to-r from-red-50 to-white rounded-lg border border-red-100">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium text-gray-800 truncate" x-text="interview.candidate_name"></p>
+                                        <p class="text-xs text-gray-500 mt-0.5" x-text="formatDate(interview.scheduled_date)"></p>
+                                    </div>
+                                    <span
+                                        class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 font-medium"
+                                        :class="(interview.no_show_count || 1) > 1 ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'"
+                                        x-text="(interview.no_show_count || 1) > 1 ? interview.no_show_count + 'x no-show' : 'No-show'"
+                                    ></span>
+                                </div>
+                                <div class="flex gap-2 mt-3">
+                                    <button
+                                        @click="rescheduleInterview(interview)"
+                                        class="flex-1 text-xs px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors font-medium"
+                                    >
+                                        Reschedule
+                                    </button>
+                                    <button
+                                        @click="markFollowupSent(interview)"
+                                        class="flex-1 text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                                    >
+                                        Follow-up Sent
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- Load More button -->
+                    <div x-show="!noShowsLoading && noShows.length < noShowsTotal" class="mt-4 text-center">
+                        <button
+                            @click="loadMoreNoShows()"
+                            class="text-sm px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
+                            :disabled="noShowsLoadingMore"
+                        >
+                            <span x-show="!noShowsLoadingMore" class="flex items-center justify-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                                Load More (<span x-text="noShowsTotal - noShows.length"></span> remaining)
+                            </span>
+                            <span x-show="noShowsLoadingMore" class="flex items-center justify-center gap-2">
+                                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                Loading...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Schedule Interview Modal -->
+    <div
+        x-show="showScheduleModal"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showScheduleModal = false"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showScheduleModal = false"></div>
+
+            <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Schedule Interview</h2>
+
+                <form @submit.prevent="createInterview()">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Candidate Name *</label>
+                            <input
+                                type="text"
+                                x-model="newInterview.candidate_name"
+                                required
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                                placeholder="Enter candidate name"
+                            >
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <input
+                                type="email"
+                                x-model="newInterview.candidate_email"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                                placeholder="candidate@email.com"
+                            >
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                            <input
+                                type="tel"
+                                x-model="newInterview.candidate_phone"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                                placeholder="+1 (555) 123-4567"
+                            >
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                                <input
+                                    type="date"
+                                    x-model="newInterview.date"
+                                    required
+                                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Time *</label>
+                                <input
+                                    type="time"
+                                    x-model="newInterview.time"
+                                    required
+                                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                                >
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Interview Type</label>
+                            <select
+                                x-model="newInterview.interview_type"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                            >
+                                <option value="Initial Screening">Initial Screening</option>
+                                <option value="Technical Assessment">Technical Assessment</option>
+                                <option value="Language Test">Language Test</option>
+                                <option value="Final Interview">Final Interview</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+                            <select
+                                x-model="newInterview.duration_minutes"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                            >
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="45">45 minutes</option>
+                                <option value="60">60 minutes</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                            <textarea
+                                x-model="newInterview.notes"
+                                rows="2"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                                placeholder="Any notes..."
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 mt-6">
+                        <button
+                            type="button"
+                            @click="showScheduleModal = false"
+                            class="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            class="flex-1 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700"
+                        >
+                            Schedule
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Complete Interview Modal -->
+    <div
+        x-show="showCompleteModal"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showCompleteModal = false"></div>
+
+            <div class="relative bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Complete Interview</h2>
+                <p class="text-gray-600 mb-4" x-text="selectedInterview?.candidate_name"></p>
+
+                <div class="space-y-2 mb-4">
+                    <button
+                        @click="submitComplete('passed')"
+                        class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                        Passed
+                    </button>
+                    <button
+                        @click="submitComplete('needs_review')"
+                        class="w-full px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+                    >
+                        Needs Review
+                    </button>
+                    <button
+                        @click="submitComplete('failed')"
+                        class="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                        Failed
+                    </button>
+                </div>
+
+                <button
+                    @click="showCompleteModal = false"
+                    class="w-full px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Day Detail Modal -->
+    <div
+        x-show="showDayDetailModal"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showDayDetailModal = false"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4 py-8">
+            <div class="fixed inset-0 bg-black/50" @click="showDayDetailModal = false"></div>
+
+            <div class="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+                <!-- Header -->
+                <div class="p-4 border-b flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800" x-text="selectedDayFormatted"></h2>
+                        <p class="text-sm text-gray-500" x-text="(selectedDayInterviews || []).length + ' interviews'"></p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            @click="scheduleOnSelectedDay()"
+                            class="px-3 py-1.5 bg-alfa-blue text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Add
+                        </button>
+                        <button @click="showDayDetailModal = false" class="p-1.5 hover:bg-gray-100 rounded-lg">
+                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interview List -->
+                <div class="p-4 overflow-y-auto flex-1">
+                    <div x-show="!selectedDayInterviews || selectedDayInterviews.length === 0" class="text-center py-8 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="text-sm">No interviews scheduled</p>
+                    </div>
+                    <div class="space-y-3">
+                        <template x-for="interview in selectedDayInterviews" :key="interview.id">
+                            <div
+                                class="p-3 rounded-lg border transition-all"
+                                :class="{
+                                    'bg-red-50 border-red-200': interview.is_no_show,
+                                    'bg-green-50 border-green-200': interview.status === 'completed',
+                                    'bg-gray-50 border-gray-200': interview.status === 'scheduled'
+                                }"
+                            >
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="text-sm font-bold" :class="{
+                                                'text-red-700': interview.is_no_show,
+                                                'text-green-700': interview.status === 'completed',
+                                                'text-blue-700': interview.status === 'scheduled'
+                                            }" x-text="interview.time"></span>
+                                            <span
+                                                class="text-xs px-2 py-0.5 rounded-full"
+                                                :class="{
+                                                    'bg-red-100 text-red-700': interview.is_no_show,
+                                                    'bg-green-100 text-green-700': interview.status === 'completed',
+                                                    'bg-blue-100 text-blue-700': interview.status === 'scheduled'
+                                                }"
+                                                x-text="interview.is_no_show ? 'No-Show' : interview.status"
+                                            ></span>
+                                        </div>
+                                        <p class="font-medium text-gray-800" x-text="interview.candidate_name"></p>
+                                        <p class="text-xs text-gray-500 mt-0.5" x-text="interview.type || 'Interview'"></p>
+                                    </div>
+                                    <div class="flex gap-1 ml-2" x-show="interview.status === 'scheduled'">
+                                        <button
+                                            @click="completeInterviewFromDay(interview)"
+                                            class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                                            title="Mark Complete"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </button>
+                                        <button
+                                            @click="markNoShowFromDay(interview)"
+                                            class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                            title="Mark No-Show"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function schedulingApp() {
+    return {
+        currentYear: new Date().getFullYear(),
+        currentMonth: new Date().getMonth(),
+        calendarDays: [],
+        calendarData: {},
+        todayInterviews: [],
+        noShows: [],
+        noShowsTotal: 0,
+        noShowFilter: '30',  // Default to last 30 days
+        noShowPendingOnly: true,
+        noShowsLoading: false,
+        noShowsLoadingMore: false,
+        noShowsLimit: 20,
+        stats: {
+            today: 0,
+            this_week: 0,
+            no_shows_this_month: 0,
+            completion_rate: 0
+        },
+        showScheduleModal: false,
+        showCompleteModal: false,
+        showDayDetailModal: false,
+        selectedInterview: null,
+        selectedDay: null,
+        selectedDayInterviews: [],
+        newInterview: {
+            candidate_name: '',
+            candidate_email: '',
+            candidate_phone: '',
+            date: '',
+            time: '09:00',
+            interview_type: 'Initial Screening',
+            duration_minutes: 30,
+            notes: ''
+        },
+
+        get monthName() {
+            return new Date(this.currentYear, this.currentMonth).toLocaleString('default', { month: 'long' });
+        },
+
+        get selectedDayFormatted() {
+            if (!this.selectedDay) return '';
+            const date = new Date(this.selectedDay.date + 'T00:00:00');
+            return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        },
+
+        async init() {
+            this.generateCalendar();
+            await this.fetchData();
+        },
+
+        generateCalendar() {
+            const firstDay = new Date(this.currentYear, this.currentMonth, 1);
+            const lastDay = new Date(this.currentYear, this.currentMonth + 1, 0);
+            const startDay = firstDay.getDay();
+            const daysInMonth = lastDay.getDate();
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            this.calendarDays = [];
+
+            // Previous month days
+            const prevMonth = new Date(this.currentYear, this.currentMonth, 0);
+            for (let i = startDay - 1; i >= 0; i--) {
+                const day = prevMonth.getDate() - i;
+                const date = new Date(this.currentYear, this.currentMonth - 1, day);
+                this.calendarDays.push({
+                    date: this.formatDateKey(date),
+                    dayNumber: day,
+                    isCurrentMonth: false,
+                    isToday: false
+                });
+            }
+
+            // Current month days
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(this.currentYear, this.currentMonth, day);
+                this.calendarDays.push({
+                    date: this.formatDateKey(date),
+                    dayNumber: day,
+                    isCurrentMonth: true,
+                    isToday: date.getTime() === today.getTime()
+                });
+            }
+
+            // Next month days
+            const remaining = 42 - this.calendarDays.length;
+            for (let day = 1; day <= remaining; day++) {
+                const date = new Date(this.currentYear, this.currentMonth + 1, day);
+                this.calendarDays.push({
+                    date: this.formatDateKey(date),
+                    dayNumber: day,
+                    isCurrentMonth: false,
+                    isToday: false
+                });
+            }
+        },
+
+        formatDateKey(date) {
+            // Use local date components to avoid UTC timezone issues
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        },
+
+        async fetchData() {
+            await Promise.all([
+                this.fetchCalendarData(),
+                this.fetchTodayInterviews(),
+                this.fetchNoShows(),
+                this.fetchStats()
+            ]);
+        },
+
+        async fetchCalendarData() {
+            try {
+                const response = await fetch(`/api/interviews/calendar/${this.currentYear}/${this.currentMonth + 1}`);
+                const data = await response.json();
+                this.calendarData = data.interviews || {};
+            } catch (error) {
+                console.error('Failed to fetch calendar:', error);
+            }
+        },
+
+        async fetchTodayInterviews() {
+            try {
+                const response = await fetch('/api/interviews/today');
+                this.todayInterviews = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch today interviews:', error);
+            }
+        },
+
+        async fetchNoShows() {
+            this.noShowsLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    pending_followup: this.noShowPendingOnly,
+                    limit: this.noShowsLimit,
+                    offset: 0
+                });
+                if (this.noShowFilter) {
+                    params.append('days', this.noShowFilter);
+                }
+
+                // Fetch both count and data in parallel
+                const [countResponse, dataResponse] = await Promise.all([
+                    fetch(`/api/interviews/no-shows/count?pending_followup=${this.noShowPendingOnly}${this.noShowFilter ? '&days=' + this.noShowFilter : ''}`),
+                    fetch(`/api/interviews/no-shows?${params}`)
+                ]);
+
+                const countData = await countResponse.json();
+                this.noShowsTotal = countData.count;
+                this.noShows = await dataResponse.json();
+            } catch (error) {
+                console.error('Failed to fetch no-shows:', error);
+            } finally {
+                this.noShowsLoading = false;
+            }
+        },
+
+        async loadMoreNoShows() {
+            this.noShowsLoadingMore = true;
+            try {
+                const params = new URLSearchParams({
+                    pending_followup: this.noShowPendingOnly,
+                    limit: this.noShowsLimit,
+                    offset: this.noShows.length
+                });
+                if (this.noShowFilter) {
+                    params.append('days', this.noShowFilter);
+                }
+
+                const response = await fetch(`/api/interviews/no-shows?${params}`);
+                const moreNoShows = await response.json();
+                this.noShows = [...this.noShows, ...moreNoShows];
+            } catch (error) {
+                console.error('Failed to load more no-shows:', error);
+            } finally {
+                this.noShowsLoadingMore = false;
+            }
+        },
+
+        async fetchStats() {
+            try {
+                const response = await fetch('/api/interviews/stats/summary');
+                this.stats = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch stats:', error);
+            }
+        },
+
+        prevMonth() {
+            if (this.currentMonth === 0) {
+                this.currentMonth = 11;
+                this.currentYear--;
+            } else {
+                this.currentMonth--;
+            }
+            this.generateCalendar();
+            this.fetchCalendarData();
+        },
+
+        nextMonth() {
+            if (this.currentMonth === 11) {
+                this.currentMonth = 0;
+                this.currentYear++;
+            } else {
+                this.currentMonth++;
+            }
+            this.generateCalendar();
+            this.fetchCalendarData();
+        },
+
+        selectDate(day) {
+            this.newInterview.date = day.date;
+            this.showScheduleModal = true;
+        },
+
+        openDayDetail(day) {
+            this.selectedDay = day;
+            this.selectedDayInterviews = this.calendarData[day.date] || [];
+            this.showDayDetailModal = true;
+        },
+
+        scheduleOnSelectedDay() {
+            if (this.selectedDay) {
+                this.newInterview.date = this.selectedDay.date;
+                this.showDayDetailModal = false;
+                this.showScheduleModal = true;
+            }
+        },
+
+        async completeInterviewFromDay(interview) {
+            this.selectedInterview = { id: interview.id, candidate_name: interview.candidate_name };
+            this.showDayDetailModal = false;
+            this.showCompleteModal = true;
+        },
+
+        async markNoShowFromDay(interview) {
+            if (!confirm(`Mark ${interview.candidate_name} as no-show?`)) return;
+
+            try {
+                const response = await fetch(`/api/interviews/${interview.id}/no-show`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ send_followup: true })
+                });
+
+                if (response.ok) {
+                    await this.fetchData();
+                    // Refresh the day detail view
+                    if (this.selectedDay) {
+                        this.selectedDayInterviews = this.calendarData[this.selectedDay.date] || [];
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to mark no-show:', error);
+            }
+        },
+
+        async createInterview() {
+            try {
+                const scheduledDate = new Date(`${this.newInterview.date}T${this.newInterview.time}`);
+
+                const response = await fetch('/api/interviews/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidate_name: this.newInterview.candidate_name,
+                        candidate_email: this.newInterview.candidate_email,
+                        candidate_phone: this.newInterview.candidate_phone,
+                        scheduled_date: scheduledDate.toISOString(),
+                        duration_minutes: parseInt(this.newInterview.duration_minutes),
+                        interview_type: this.newInterview.interview_type,
+                        notes: this.newInterview.notes
+                    })
+                });
+
+                if (response.ok) {
+                    this.showScheduleModal = false;
+                    this.resetNewInterview();
+                    await this.fetchData();
+                }
+            } catch (error) {
+                console.error('Failed to create interview:', error);
+            }
+        },
+
+        resetNewInterview() {
+            this.newInterview = {
+                candidate_name: '',
+                candidate_email: '',
+                candidate_phone: '',
+                date: '',
+                time: '09:00',
+                interview_type: 'Initial Screening',
+                duration_minutes: 30,
+                notes: ''
+            };
+        },
+
+        completeInterview(interview) {
+            this.selectedInterview = interview;
+            this.showCompleteModal = true;
+        },
+
+        async submitComplete(outcome) {
+            try {
+                const response = await fetch(
+                    `/api/interviews/${this.selectedInterview.id}/complete?outcome=${outcome}`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    this.showCompleteModal = false;
+                    this.selectedInterview = null;
+                    await this.fetchData();
+                }
+            } catch (error) {
+                console.error('Failed to complete interview:', error);
+            }
+        },
+
+        async markNoShow(interview) {
+            if (!confirm(`Mark ${interview.candidate_name} as no-show?`)) return;
+
+            try {
+                const response = await fetch(`/api/interviews/${interview.id}/no-show`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ send_followup: true })
+                });
+
+                if (response.ok) {
+                    await this.fetchData();
+                }
+            } catch (error) {
+                console.error('Failed to mark no-show:', error);
+            }
+        },
+
+        async markFollowupSent(interview) {
+            try {
+                const response = await fetch(`/api/interviews/${interview.id}/followup-sent`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    await this.fetchNoShows();
+                }
+            } catch (error) {
+                console.error('Failed to mark followup sent:', error);
+            }
+        },
+
+        async rescheduleInterview(interview) {
+            const newDate = prompt('Enter new date and time (YYYY-MM-DD HH:MM):');
+            if (!newDate) return;
+
+            try {
+                const response = await fetch(
+                    `/api/interviews/${interview.id}/reschedule?new_date=${encodeURIComponent(newDate + ':00')}&reason=Rescheduled after no-show`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    await this.fetchData();
+                }
+            } catch (error) {
+                console.error('Failed to reschedule:', error);
+            }
+        },
+
+        formatTime(dateStr) {
+            return new Date(dateStr).toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        },
+
+        formatDate(dateStr) {
+            return new Date(dateStr).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+    };
+}
+</script>
+{% endblock %}
