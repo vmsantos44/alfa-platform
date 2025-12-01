@@ -50,7 +50,7 @@ class SchedulerService:
             print(f"[Scheduler] Job {event.job_id} completed successfully")
 
     async def _sync_job(self):
-        """The actual sync job that runs on schedule - syncs candidates and interviews"""
+        """The actual sync job that runs on schedule - syncs candidates, interviews, and tasks"""
         if SchedulerService._sync_in_progress:
             print("[Scheduler] Sync already in progress, skipping...")
             return
@@ -69,21 +69,39 @@ class SchedulerService:
             print("[Scheduler] Syncing interviews...")
             interview_result = await SyncService.sync_interviews_from_zoho()
 
+            # Sync tasks
+            print("[Scheduler] Syncing tasks...")
+            task_result = await SyncService.sync_tasks_from_zoho()
+
             # Combine results
             result = {
                 "candidates": candidate_result,
                 "interviews": interview_result,
-                "records_processed": candidate_result['records_processed'] + interview_result['records_processed'],
-                "records_created": candidate_result['records_created'] + interview_result['records_created'],
-                "records_updated": candidate_result['records_updated'] + interview_result['records_updated'],
+                "tasks": task_result,
+                "records_processed": (
+                    candidate_result['records_processed'] +
+                    interview_result['records_processed'] +
+                    task_result['total_fetched']
+                ),
+                "records_created": (
+                    candidate_result['records_created'] +
+                    interview_result['records_created'] +
+                    task_result['created']
+                ),
+                "records_updated": (
+                    candidate_result['records_updated'] +
+                    interview_result['records_updated'] +
+                    task_result['updated']
+                ),
             }
 
             SchedulerService._last_sync_result = result
             SchedulerService._last_sync_time = datetime.utcnow()
 
             print(f"[Scheduler] Auto-sync completed: "
-                  f"Candidates ({candidate_result['records_processed']} processed), "
-                  f"Interviews ({interview_result['records_processed']} processed)")
+                  f"Candidates ({candidate_result['records_processed']}), "
+                  f"Interviews ({interview_result['records_processed']}), "
+                  f"Tasks ({task_result['total_fetched']})")
 
         except Exception as e:
             SchedulerService._last_sync_error = str(e)

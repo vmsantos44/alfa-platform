@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
-from app.models.database_models import CandidateCache, Interview, SyncLog
+from app.models.database_models import CandidateCache, Interview, Task, SyncLog
 from app.integrations.zoho.crm import ZohoCRM
 
 
@@ -813,6 +813,231 @@ class SyncService:
             result = await db.execute(
                 select(SyncLog)
                 .where(SyncLog.sync_type == "interviews", SyncLog.status == "completed")
+                .order_by(SyncLog.completed_at.desc())
+                .limit(1)
+            )
+            sync_log = result.scalar_one_or_none()
+            return sync_log.completed_at if sync_log else None
+
+    # ========================================================================
+    # TASK SYNC
+    # ========================================================================
+
+    @classmethod
+    async def sync_tasks_from_zoho(cls) -> Dict[str, Any]:
+        """
+        Sync tasks from Zoho CRM Tasks module.
+        Fetches open tasks and updates local database.
+        """
+        print("📋 Starting task sync from Zoho CRM...")
+
+        async with async_session() as db:
+            # Create sync log
+            sync_log = SyncLog(
+                sync_type="tasks",
+                status="in_progress",
+                started_at=datetime.utcnow()
+            )
+            db.add(sync_log)
+            await db.commit()
+
+            try:
+                crm = ZohoCRM()
+                stats = {
+                    "total_fetched": 0,
+                    "created": 0,
+                    "updated": 0,
+                    "errors": 0
+                }
+
+                page = 1
+                has_more = True
+
+                while has_more:
+                    print(f"📋 Fetching tasks page {page}...")
+
+                    response = await crm.get_records(
+                        module="Tasks",
+                        page=page,
+                        per_page=100,
+                        fields=[
+                            "id", "Subject", "Due_Date", "Status", "Priority",
+                            "What_Id", "$se_module", "Owner", "Created_By",
+                            "Description", "Created_Time", "Modified_Time",
+                            "Closed_Time"
+                        ]
+                    )
+
+                    tasks = response.get("data", [])
+                    info = response.get("info", {})
+
+                    for task_data in tasks:
+                        try:
+                            is_new = await cls._upsert_task_from_zoho(db, task_data)
+                            stats["total_fetched"] += 1
+                            if is_new:
+                                stats["created"] += 1
+                            else:
+                                stats["updated"] += 1
+                        except Exception as e:
+                            print(f"⚠️ Error syncing task {task_data.get('id')}: {e}")
+                            stats["errors"] += 1
+
+                    # Commit each page
+                    await db.commit()
+
+                    has_more = info.get("more_records", False)
+                    page += 1
+
+                    # Safety limit
+                    if page > 50:
+                        print("⚠️ Reached page limit (50)")
+                        break
+
+                # Update sync log
+                sync_log.status = "completed"
+                sync_log.completed_at = datetime.utcnow()
+                sync_log.records_processed = stats["total_fetched"]
+                sync_log.records_created = stats["created"]
+                sync_log.records_updated = stats["updated"]
+                await db.commit()
+
+                print(f"✅ Task sync complete: {stats}")
+                return stats
+
+            except Exception as e:
+                sync_log.status = "failed"
+                sync_log.error_message = str(e)[:500]
+                sync_log.completed_at = datetime.utcnow()
+                await db.commit()
+                raise
+
+    @classmethod
+    async def _upsert_task_from_zoho(cls, db: AsyncSession, data: Dict[str, Any]) -> bool:
+        """
+        Create or update a task from Zoho data.
+        Returns True if created, False if updated.
+        """
+        zoho_task_id = str(data.get("id", ""))
+        if not zoho_task_id:
+            return False
+
+        # Check if task exists
+        result = await db.execute(
+            select(Task).where(Task.zoho_task_id == zoho_task_id)
+        )
+        existing = result.scalar_one_or_none()
+
+        # Parse dates
+        due_date = cls._parse_date(data.get("Due_Date"))
+        closed_time = parse_datetime(data.get("Closed_Time"))
+
+        # Get owner info
+        owner_data = data.get("Owner", {})
+        assigned_to = owner_data.get("name") if isinstance(owner_data, dict) else None
+
+        # Get creator info
+        creator_data = data.get("Created_By", {})
+        created_by = creator_data.get("name") if isinstance(creator_data, dict) else None
+
+        # Get related record (candidate)
+        what_id_data = data.get("What_Id")
+        zoho_candidate_id = None
+        candidate_name = None
+        if what_id_data and isinstance(what_id_data, dict):
+            zoho_candidate_id = what_id_data.get("id")
+            candidate_name = what_id_data.get("name")
+
+        # Map Zoho status to our status
+        zoho_status = data.get("Status", "Not Started")
+        status_map = {
+            "Not Started": "pending",
+            "In Progress": "in_progress",
+            "Completed": "completed",
+            "Deferred": "pending",
+            "Waiting for input": "pending"
+        }
+        status = status_map.get(zoho_status, "pending")
+
+        # Map priority
+        zoho_priority = data.get("Priority", "Medium")
+        priority_map = {
+            "High": "high",
+            "Highest": "high",
+            "Medium": "medium",
+            "Normal": "medium",
+            "Low": "low",
+            "Lowest": "low"
+        }
+        priority = priority_map.get(zoho_priority, "medium")
+
+        # Determine task type from subject
+        subject = data.get("Subject", "Task")
+        subject_lower = subject.lower()
+        if "follow up" in subject_lower or "follow-up" in subject_lower:
+            task_type = "follow_up"
+        elif "document" in subject_lower or "ss" in subject_lower:
+            task_type = "document_request"
+        elif "training" in subject_lower:
+            task_type = "training"
+        elif "assessment" in subject_lower or "language" in subject_lower:
+            task_type = "assessment"
+        elif "interview" in subject_lower:
+            task_type = "follow_up"
+        else:
+            task_type = "general"
+
+        if existing:
+            # Update existing task
+            existing.title = subject
+            existing.description = data.get("Description")
+            existing.task_type = task_type
+            existing.status = status
+            existing.priority = priority
+            existing.due_date = due_date
+            existing.assigned_to = assigned_to
+            existing.created_by = created_by
+            existing.zoho_candidate_id = zoho_candidate_id
+            existing.candidate_name = candidate_name
+            existing.completed_at = closed_time
+            existing.updated_at = datetime.utcnow()
+            return False
+        else:
+            # Create new task
+            new_task = Task(
+                zoho_task_id=zoho_task_id,
+                title=subject,
+                description=data.get("Description"),
+                task_type=task_type,
+                status=status,
+                priority=priority,
+                due_date=due_date,
+                assigned_to=assigned_to,
+                created_by=created_by,
+                zoho_candidate_id=zoho_candidate_id,
+                candidate_name=candidate_name,
+                completed_at=closed_time
+            )
+            db.add(new_task)
+            return True
+
+    @classmethod
+    def _parse_date(cls, date_str: Optional[str]) -> Optional[datetime]:
+        """Parse a date string (YYYY-MM-DD) to datetime"""
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+
+    @classmethod
+    async def get_last_task_sync(cls) -> Optional[datetime]:
+        """Get the timestamp of the last successful task sync"""
+        async with async_session() as db:
+            result = await db.execute(
+                select(SyncLog)
+                .where(SyncLog.sync_type == "tasks", SyncLog.status == "completed")
                 .order_by(SyncLog.completed_at.desc())
                 .limit(1)
             )

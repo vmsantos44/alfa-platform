@@ -122,6 +122,23 @@ async def sync_interviews():
         raise HTTPException(status_code=500, detail=f"Interview sync failed: {str(e)}")
 
 
+@router.post("/tasks")
+async def sync_tasks():
+    """
+    Sync tasks from Zoho CRM Tasks module to local database.
+    Fetches tasks and maps them to Task records for Action Required.
+    """
+    try:
+        stats = await SyncService.sync_tasks_from_zoho()
+        return {
+            "success": True,
+            "message": "Task sync completed",
+            **stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Task sync failed: {str(e)}")
+
+
 @router.get("/status")
 async def get_sync_status():
     """Get the status of the last sync for both candidates and interviews"""
