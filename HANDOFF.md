@@ -19,6 +19,7 @@
 | Database | SQLite with SQLAlchemy async (aiosqlite) |
 | Frontend | Jinja2 Templates + Alpine.js + Tailwind CSS |
 | CRM Integration | Zoho CRM API (OAuth 2.0) |
+| Mail Integration | Zoho Mail API (separate OAuth client) |
 | Bookings Integration | Zoho Bookings API (separate OAuth client) |
 | Task Scheduler | APScheduler |
 | Charts | Chart.js |
@@ -84,6 +85,13 @@
 - Shows next sync time, last sync results
 - Prevents overlapping syncs
 
+### 9. Zoho Mail Integration
+- **OAuth Flow**: `/oauth/authorize` and `/oauth/callback` endpoints
+- **Send Emails**: Send emails via Zoho Mail API
+- **Get Emails**: Fetch inbox, folders, search emails
+- **Contact History**: Get all emails sent to/from a specific email address
+- **Use Case**: Display email history on candidate profiles
+
 ---
 
 ## Project Structure
@@ -112,6 +120,7 @@ alfa-platform/
 │       └── zoho/
 │           ├── auth.py         # OAuth 2.0 token management
 │           ├── crm.py          # Zoho CRM API client
+│           ├── mail.py         # Zoho Mail API client (separate OAuth)
 │           └── bookings.py     # Zoho Bookings API client (separate OAuth)
 ├── templates/
 │   ├── base.html               # Base layout with sidebar
@@ -248,6 +257,19 @@ Supporting tables for sync tracking, alerts, and tasks.
 | GET | `/api/dashboard/analytics/by-owner` | Owner breakdown |
 | GET | `/api/dashboard/analytics/recent-activity` | Recent activity |
 
+### Zoho Mail
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/oauth/authorize` | Start OAuth flow for Zoho Mail |
+| GET | `/oauth/callback` | OAuth callback (automatic) |
+| GET | `/api/mail/test` | Test mail connection |
+| GET | `/api/mail/folders` | List all mail folders |
+| GET | `/api/mail/emails` | Get emails from inbox |
+| GET | `/api/mail/emails/{id}` | Get specific email with content |
+| GET | `/api/mail/search?q=...` | Search emails |
+| GET | `/api/mail/contact/{email}` | Get email history for a contact |
+| POST | `/api/mail/send` | Send an email |
+
 ---
 
 ## Zoho Integration
@@ -256,6 +278,14 @@ Supporting tables for sync tracking, alerts, and tasks.
 - OAuth 2.0 with refresh token
 - Syncs Leads (candidates) and Events (interviews)
 - Auto-refresh on token expiry
+
+### Zoho Mail (Separate Client)
+- **Purpose**: Send/receive emails, show email history on candidate profiles
+- **Status**: Fully implemented and working
+- **OAuth Flow**: `/oauth/authorize` → Zoho login → `/oauth/callback`
+- **Connected Account**: vsantos@alfasystemscv.com
+- **Location**: `app/integrations/zoho/mail.py`
+- **Scopes**: `ZohoMail.messages.ALL`, `ZohoMail.accounts.READ`, `ZohoMail.folders.READ`
 
 ### Zoho Bookings (Separate Client)
 - **Purpose**: Get accurate appointment status (COMPLETED, NO_SHOW, CANCEL)
@@ -286,10 +316,12 @@ ZOHO_BOOKS_CLIENT_ID=
 ZOHO_BOOKS_CLIENT_SECRET=
 ZOHO_BOOKS_REFRESH_TOKEN=
 
-# Zoho Mail (future - optional)
-ZOHO_MAIL_CLIENT_ID=
-ZOHO_MAIL_CLIENT_SECRET=
-ZOHO_MAIL_REFRESH_TOKEN=
+# Zoho Mail (implemented)
+ZOHO_MAIL_CLIENT_ID=1000.XXXXXXXXXXXXX
+ZOHO_MAIL_CLIENT_SECRET=XXXXXXXXXXXXXXX
+ZOHO_MAIL_REFRESH_TOKEN=1000.XXXXX.XXXXX
+ZOHO_MAIL_REDIRECT_URI=https://platform.alfacrm.site/oauth/callback
+ZOHO_MAIL_ACCOUNT_ID=4670982000000008002
 ```
 
 ### Interview Sync Logic
@@ -425,7 +457,9 @@ uvicorn app.main:app --reload --port 8003
 | `app/routes/candidates.py` | Candidate API endpoints |
 | `app/routes/interviews.py` | Interview API endpoints |
 | `app/integrations/zoho/crm.py` | Zoho CRM API client |
+| `app/integrations/zoho/mail.py` | Zoho Mail API client |
 | `app/integrations/zoho/bookings.py` | Zoho Bookings API client |
+| `app/routes/oauth.py` | OAuth authorization flow |
 | `templates/scheduling.html` | Scheduling page with calendar |
 
 ---
@@ -494,6 +528,18 @@ uvicorn app.main:app --reload --port 8003
 
 ## Recent Changes (December 2025)
 
+### Zoho Mail Integration (NEW)
+- Full OAuth 2.0 flow with `/oauth/authorize` and `/oauth/callback`
+- Zoho Mail API client (`app/integrations/zoho/mail.py`)
+- API endpoints for:
+  - Test connection (`/api/mail/test`)
+  - List folders (`/api/mail/folders`)
+  - Get/search emails (`/api/mail/emails`, `/api/mail/search`)
+  - Contact email history (`/api/mail/contact/{email}`)
+  - Send emails (`/api/mail/send`)
+- Auto token refresh with 60-second buffer
+- Retry logic with exponential backoff
+
 ### Interview Sync
 - Added `sync_interviews_from_zoho()` in sync.py
 - Syncs from Zoho CRM Events module
@@ -514,8 +560,9 @@ uvicorn app.main:app --reload --port 8003
 
 ### Zoho Multi-Client Architecture
 - Config supports separate OAuth credentials per Zoho product
+- **Mail client implemented and working**
 - Bookings client implemented (API issues pending)
-- Ready for WorkDrive, Books, Mail integration
+- Ready for WorkDrive, Books integration
 
 ---
 
