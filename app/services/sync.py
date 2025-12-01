@@ -1593,7 +1593,8 @@ class SyncService:
                     per_page=100
                 )
 
-                emails = response.get("data", [])
+                # Zoho returns emails in 'email_related_list' (not 'data' like other modules)
+                emails = response.get("email_related_list", response.get("data", []))
                 if not emails:
                     break
 
