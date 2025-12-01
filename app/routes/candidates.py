@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.database_models import CandidateCache, ActionAlert, Interview, Task, CandidateNote, CrmNote, CandidateEmail
+from app.services.sync import SyncService
 from app.models.schemas import (
     CandidateResponse,
     CandidateSummary,
@@ -1102,9 +1103,12 @@ async def get_email_content(
 
     # If we already have body content, return it
     if email.body_full:
+        # Check if it's HTML or plain text
+        is_html = email.body_full.strip().startswith('<') or '<html' in email.body_full.lower()
         return {
             "id": email.id,
-            "content": email.body_full,
+            "content": email.body_snippet or SyncService.strip_html(email.body_full)[:200],
+            "html_content": email.body_full if is_html else None,
             "cached": True
         }
 
@@ -1120,19 +1124,20 @@ async def get_email_content(
             message_id=email.message_id
         )
 
-        # Extract and clean content
-        content = email_data.get("content") or email_data.get("Content") or ""
-        if content:
-            content = SyncService.strip_html(content)
+        # Extract content - keep HTML for rendering, create plain text snippet
+        html_content = email_data.get("content") or email_data.get("Content") or ""
+        plain_content = SyncService.strip_html(html_content) if html_content else ""
 
-            # Cache the content in the database
-            email.body_full = content
-            email.body_snippet = content[:200] if content else ""
+        if html_content:
+            # Cache both HTML and plain text
+            email.body_full = html_content  # Store original HTML
+            email.body_snippet = plain_content[:200] if plain_content else ""
             await db.commit()
 
         return {
             "id": email.id,
-            "content": content,
+            "content": plain_content,  # Plain text for preview
+            "html_content": html_content,  # Original HTML for iframe
             "cached": False
         }
 

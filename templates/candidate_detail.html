@@ -681,8 +681,23 @@
                                             <div class="spinner w-5 h-5"></div>
                                             <span class="ml-2 text-sm text-gray-500">Loading content...</span>
                                         </div>
-                                        <!-- Email content -->
-                                        <div x-show="loadingEmailContent !== email.id" class="bg-white rounded p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto" x-text="email.body_full || email.body_snippet || 'No content available'"></div>
+                                        <!-- Email content in iframe (HTML) or plain text -->
+                                        <div x-show="loadingEmailContent !== email.id" class="bg-white rounded border overflow-hidden">
+                                            <!-- HTML content in sandboxed iframe -->
+                                            <template x-if="email.html_content">
+                                                <iframe
+                                                    :srcdoc="email.html_content"
+                                                    sandbox="allow-same-origin"
+                                                    class="w-full border-0"
+                                                    style="min-height: 300px; max-height: 500px;"
+                                                    @load="$el.style.height = Math.min($el.contentWindow.document.body.scrollHeight + 20, 500) + 'px'"
+                                                ></iframe>
+                                            </template>
+                                            <!-- Plain text fallback -->
+                                            <template x-if="!email.html_content">
+                                                <div class="p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto" x-text="email.body_full || email.body_snippet || 'No content available'"></div>
+                                            </template>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -978,11 +993,13 @@ function candidateDetailApp() {
                     const idx = this.emailsData.emails.findIndex(e => e.id === email.id);
                     if (idx !== -1) {
                         this.emailsData.emails[idx].body_full = data.content;
+                        this.emailsData.emails[idx].html_content = data.html_content;
                         this.emailsData.emails[idx].body_snippet = data.content?.substring(0, 200) || '';
                     }
                     // Also update selectedEmail reference
                     if (this.selectedEmail?.id === email.id) {
                         this.selectedEmail.body_full = data.content;
+                        this.selectedEmail.html_content = data.html_content;
                     }
                 }
             } catch (err) {
