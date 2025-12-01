@@ -200,6 +200,7 @@ class AlertsService:
                     "candidate_name": candidate.full_name,
                     "candidate_id": candidate.id,
                     "zoho_id": candidate.zoho_id,
+                    "recruitment_owner": candidate.recruitment_owner,
                     "stage": stage,
                     "days_stuck": days_stuck,
                     "threshold_days": threshold_days,
@@ -323,6 +324,7 @@ class AlertsService:
                 "candidate_name": candidate.full_name,
                 "candidate_id": candidate.id,
                 "zoho_id": candidate.zoho_id,
+                "recruitment_owner": candidate.recruitment_owner,
                 "stage": candidate.stage,
                 "language": candidate.language,
                 "days_waiting": days_waiting,
@@ -360,6 +362,7 @@ class AlertsService:
                 "candidate_name": candidate.full_name,
                 "candidate_id": candidate.id,
                 "zoho_id": candidate.zoho_id,
+                "recruitment_owner": candidate.recruitment_owner,
                 "stage": candidate.stage,
                 "action_url": f"/candidates/{candidate.id}",
                 "action_label": "Review"

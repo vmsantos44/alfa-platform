@@ -23,7 +23,7 @@
             <div class="flex items-center gap-3">
                 <!-- Owner Filter -->
                 <div class="flex items-center gap-2">
-                    <label class="text-sm text-gray-600 whitespace-nowrap">Candidate Owner:</label>
+                    <label class="text-sm text-gray-600 whitespace-nowrap">Recruitment Owner:</label>
                     <select
                         x-model="selectedOwner"
                         @change="applyOwnerFilter()"
@@ -456,10 +456,10 @@ function dashboardApp() {
                 const data = await response.json();
                 this.rawCandidates = data.candidates || data || [];
 
-                // Extract unique owners
+                // Extract unique recruitment owners
                 const ownerSet = new Set();
                 this.rawCandidates.forEach(c => {
-                    if (c.candidate_owner) ownerSet.add(c.candidate_owner);
+                    if (c.recruitment_owner) ownerSet.add(c.recruitment_owner);
                 });
                 this.owners = Array.from(ownerSet).sort();
 
@@ -525,9 +525,9 @@ function dashboardApp() {
                 localStorage.removeItem('dashboard_owner_filter');
             }
 
-            // Filter candidates
+            // Filter candidates by recruitment_owner
             const filtered = this.selectedOwner
-                ? this.rawCandidates.filter(c => c.candidate_owner === this.selectedOwner)
+                ? this.rawCandidates.filter(c => c.recruitment_owner === this.selectedOwner)
                 : this.rawCandidates;
 
             // Calculate filtered stats
@@ -557,7 +557,7 @@ function dashboardApp() {
 
             // Filter recent activity
             this.filteredRecentActivity = this.selectedOwner
-                ? this.rawRecentActivity.filter(a => a.candidate_owner === this.selectedOwner)
+                ? this.rawRecentActivity.filter(a => a.recruitment_owner === this.selectedOwner)
                 : this.rawRecentActivity;
 
             // Update alert counts (filtered by owner where applicable)
@@ -571,12 +571,11 @@ function dashboardApp() {
         },
 
         getFilteredAlertCount() {
-            // For now, return total from raw alerts
-            // In a real implementation, you'd filter alerts by owner
+            // Filter alerts by recruitment owner
             return this.rawSystemAlerts.filter(a => {
                 if (!this.selectedOwner) return true;
                 // Check if alert is related to a candidate owned by selected owner
-                return !a.candidate_owner || a.candidate_owner === this.selectedOwner;
+                return !a.recruitment_owner || a.recruitment_owner === this.selectedOwner;
             }).length;
         },
 
@@ -585,13 +584,13 @@ function dashboardApp() {
             return this.rawSystemAlerts.filter(a => {
                 if (a.category !== 'upcoming_interviews') return false;
                 if (!this.selectedOwner) return true;
-                return !a.candidate_owner || a.candidate_owner === this.selectedOwner;
+                return !a.recruitment_owner || a.recruitment_owner === this.selectedOwner;
             }).length;
         },
 
         updateFilteredAlertCounts() {
             const filtered = this.selectedOwner
-                ? this.rawSystemAlerts.filter(a => !a.candidate_owner || a.candidate_owner === this.selectedOwner)
+                ? this.rawSystemAlerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
                 : this.rawSystemAlerts;
 
             this.filteredAlertCounts = {
@@ -618,7 +617,7 @@ function dashboardApp() {
 
         get filteredAlerts() {
             let alerts = this.selectedOwner
-                ? this.rawSystemAlerts.filter(a => !a.candidate_owner || a.candidate_owner === this.selectedOwner)
+                ? this.rawSystemAlerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
                 : this.rawSystemAlerts;
 
             if (this.alertFilter) {

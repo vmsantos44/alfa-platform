@@ -556,7 +556,8 @@ async def get_recent_activity(
         "stage": c.stage,
         "activity_date": c.last_activity_date.isoformat() if c.last_activity_date else None,
         "tier": c.tier,
-        "language": c.language
+        "language": c.language,
+        "recruitment_owner": c.recruitment_owner
     } for c in candidates]
 
     return {"data": data}
