@@ -470,10 +470,10 @@ async def get_candidate_detail(
         for n in notes_result.scalars().all()
     ]
 
-    # Fetch related interviews
+    # Fetch related interviews (match by zoho_candidate_id since interviews are synced from Zoho)
     interviews_result = await db.execute(
         select(Interview)
-        .where(Interview.candidate_id == candidate_id)
+        .where(Interview.zoho_candidate_id == candidate.zoho_id)
         .order_by(Interview.scheduled_date.desc())
     )
     interviews = [
@@ -501,10 +501,10 @@ async def get_candidate_detail(
         for i in interviews_result.scalars().all()
     ]
 
-    # Fetch related tasks
+    # Fetch related tasks (match by zoho_candidate_id since tasks are synced from Zoho)
     tasks_result = await db.execute(
         select(Task)
-        .where(Task.candidate_id == candidate_id)
+        .where(Task.zoho_candidate_id == candidate.zoho_id)
         .order_by(Task.created_at.desc())
     )
     tasks = [
