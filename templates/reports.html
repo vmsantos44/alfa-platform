@@ -121,7 +121,9 @@
             <!-- Weekly Chart -->
             <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
                 <h3 class="font-semibold text-gray-800 mb-4">Weekly Trends</h3>
-                <canvas id="weeklyChart" height="300"></canvas>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
             </div>
 
             <!-- Weekly Table -->
@@ -194,7 +196,9 @@
                 <!-- Pipeline Funnel -->
                 <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
                     <h3 class="font-semibold text-gray-800 mb-4">Stage Funnel</h3>
-                    <canvas id="pipelineFunnelChart" height="250"></canvas>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="pipelineFunnelChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -267,7 +271,9 @@
                         </select>
                     </div>
                 </div>
-                <canvas id="recruiterChart" height="300"></canvas>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="recruiterChart"></canvas>
+                </div>
             </div>
 
             <!-- Recruiter Summary Cards (when single recruiter selected) -->
@@ -365,11 +371,15 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h3 class="font-semibold text-gray-800 mb-4">Candidates by Source</h3>
-                    <canvas id="sourceChart" height="300"></canvas>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="sourceChart"></canvas>
+                    </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h3 class="font-semibold text-gray-800 mb-4">Source Effectiveness</h3>
-                    <canvas id="sourceEffectivenessChart" height="300"></canvas>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="sourceEffectivenessChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -415,11 +425,15 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h3 class="font-semibold text-gray-800 mb-4">Language Distribution</h3>
-                    <canvas id="languageDistChart" height="300"></canvas>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="languageDistChart"></canvas>
+                    </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h3 class="font-semibold text-gray-800 mb-4">Tier Breakdown by Language</h3>
-                    <canvas id="languageTierChart" height="300"></canvas>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="languageTierChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -489,11 +503,15 @@
                             <option value="90">Last 90 days</option>
                         </select>
                     </div>
-                    <canvas id="outcomeChart" height="250"></canvas>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="outcomeChart"></canvas>
+                    </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h3 class="font-semibold text-gray-800 mb-4">Interviews by Type</h3>
-                    <canvas id="typeChart" height="250"></canvas>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="typeChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
