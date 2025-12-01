@@ -1063,6 +1063,38 @@ class SyncService:
     # ========================================================================
 
     @classmethod
+    def strip_html(cls, content: str) -> str:
+        """
+        Remove HTML tags from content and clean up whitespace.
+
+        Args:
+            content: Text that may contain HTML tags
+
+        Returns:
+            Plain text with HTML removed
+        """
+        if not content:
+            return ""
+
+        import re
+
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', content)
+
+        # Decode common HTML entities
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        text = text.replace('&quot;', '"')
+        text = text.replace('&#39;', "'")
+
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text)
+
+        return text.strip()
+
+    @classmethod
     def summarize_note(cls, content: str, max_length: int = 200) -> str:
         """
         Summarize note content using a simple heuristic approach.
@@ -1263,9 +1295,10 @@ class SyncService:
         )
         existing = result.scalar_one_or_none()
 
-        # Parse data
+        # Parse data and strip HTML from content
         title = data.get("Note_Title") or ""
-        raw_content = data.get("Note_Content") or ""
+        raw_content_original = data.get("Note_Content") or ""
+        raw_content = cls.strip_html(raw_content_original)
 
         # Get parent (candidate) info
         parent_id_data = data.get("Parent_Id")
