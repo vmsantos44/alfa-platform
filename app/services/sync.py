@@ -1078,8 +1078,15 @@ class SyncService:
 
         import re
 
+        # Remove script and style elements entirely (including content)
+        text = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        # Remove HTML comments
+        text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+
         # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', content)
+        text = re.sub(r'<[^>]+>', '', text)
 
         # Decode common HTML entities
         text = text.replace('&nbsp;', ' ')
@@ -1088,6 +1095,12 @@ class SyncService:
         text = text.replace('&gt;', '>')
         text = text.replace('&quot;', '"')
         text = text.replace('&#39;', "'")
+        text = text.replace('&rsquo;', "'")
+        text = text.replace('&lsquo;', "'")
+        text = text.replace('&rdquo;', '"')
+        text = text.replace('&ldquo;', '"')
+        text = text.replace('&mdash;', '—')
+        text = text.replace('&ndash;', '–')
 
         # Normalize whitespace
         text = re.sub(r'\s+', ' ', text)
