@@ -83,6 +83,23 @@ class CandidateNoteResponse(CandidateNoteBase):
         from_attributes = True
 
 
+class CrmNoteResponse(BaseModel):
+    """CRM Note response (synced from Zoho)"""
+    id: int
+    zoho_note_id: str
+    zoho_candidate_id: Optional[str] = None
+    parent_module: str = "Leads"
+    title: Optional[str] = None
+    summary: Optional[str] = None  # Summarized version for dashboard display
+    raw_content: str  # Full note text
+    created_by: Optional[str] = None
+    zoho_created_time: Optional[datetime] = None
+    zoho_modified_time: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================
 # Candidate Detail Schema (Full profile)
 # ============================================
@@ -167,6 +184,7 @@ class CandidateDetailResponse(BaseModel):
 
     # Related data
     notes: List["CandidateNoteResponse"] = []
+    crm_notes: List["CrmNoteResponse"] = []  # Notes synced from Zoho CRM
     interviews: List["InterviewResponse"] = []
     tasks: List["TaskResponse"] = []
 

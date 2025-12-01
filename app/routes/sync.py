@@ -139,11 +139,33 @@ async def sync_tasks():
         raise HTTPException(status_code=500, detail=f"Task sync failed: {str(e)}")
 
 
+@router.post("/notes")
+async def sync_notes(
+    full_sync: bool = Query(False, description="If True, fetch all notes regardless of last sync time")
+):
+    """
+    Sync notes from Zoho CRM Notes module to local database.
+    Uses modified_since for incremental sync by default.
+    Stores both raw content and summarized version.
+    """
+    try:
+        stats = await SyncService.sync_notes_from_zoho(full_sync=full_sync)
+        return {
+            "success": True,
+            "message": "Notes sync completed",
+            **stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Notes sync failed: {str(e)}")
+
+
 @router.get("/status")
 async def get_sync_status():
-    """Get the status of the last sync for both candidates and interviews"""
+    """Get the status of the last sync for candidates, interviews, tasks, and notes"""
     last_candidate_sync = await SyncService.get_last_sync()
     last_interview_sync = await SyncService.get_last_interview_sync()
+    last_task_sync = await SyncService.get_last_task_sync()
+    last_notes_sync = await SyncService.get_last_notes_sync()
     return {
         "candidates": {
             "last_sync": last_candidate_sync.isoformat() if last_candidate_sync else None,
@@ -152,6 +174,14 @@ async def get_sync_status():
         "interviews": {
             "last_sync": last_interview_sync.isoformat() if last_interview_sync else None,
             "status": "ok" if last_interview_sync else "never_synced"
+        },
+        "tasks": {
+            "last_sync": last_task_sync.isoformat() if last_task_sync else None,
+            "status": "ok" if last_task_sync else "never_synced"
+        },
+        "notes": {
+            "last_sync": last_notes_sync.isoformat() if last_notes_sync else None,
+            "status": "ok" if last_notes_sync else "never_synced"
         }
     }
 
