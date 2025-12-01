@@ -1697,13 +1697,26 @@ class SyncService:
         """
         Insert or update an email record from Zoho CRM data.
 
+        Zoho email_related_list structure:
+        {
+            "message_id": "unique_hash",
+            "subject": "Email Subject",
+            "from": {"user_name": "Name", "email": "email@example.com"},
+            "to": [{"user_name": "Name", "email": "email@example.com"}],
+            "sent_time": "2025-11-29T01:48:52+03:00",
+            "sent": true,  # true = outbound
+            "has_attachment": false,
+            "snippet": null,  # preview not available in list
+            "owner": {"name": "Owner Name", "id": "123"}
+        }
+
         Returns:
             True if created, False if updated
         """
         from app.models.database_models import CandidateEmail
 
-        # Get unique email identifier
-        zoho_email_id = str(data.get("id", "") or data.get("Message_Id", ""))
+        # Get unique email identifier - Zoho uses 'message_id' for emails
+        zoho_email_id = str(data.get("message_id", "") or data.get("id", "") or data.get("Message_Id", ""))
         if not zoho_email_id:
             return False
 
@@ -1713,17 +1726,17 @@ class SyncService:
         )
         existing = result.scalar_one_or_none()
 
-        # Parse email data
-        from_data = data.get("From") or data.get("from") or {}
-        to_data = data.get("To") or data.get("to") or []
+        # Parse email data - Zoho uses lowercase keys
+        from_data = data.get("from") or data.get("From") or {}
+        to_data = data.get("to") or data.get("To") or []
 
-        # Handle From field (can be string or dict)
+        # Handle From field (dict with email key)
         if isinstance(from_data, dict):
             from_address = from_data.get("email", "") or from_data.get("Email", "")
         else:
             from_address = str(from_data) if from_data else ""
 
-        # Handle To field (can be list of dicts or string)
+        # Handle To field (list of dicts)
         if isinstance(to_data, list):
             to_addresses = []
             for t in to_data:
@@ -1750,33 +1763,37 @@ class SyncService:
         else:
             cc_address = str(cc_data) if cc_data else None
 
-        # Subject
-        subject = data.get("Subject") or data.get("subject") or ""
+        # Subject (Zoho uses lowercase)
+        subject = data.get("subject") or data.get("Subject") or ""
 
-        # Body - strip HTML and create snippet
-        body_content = data.get("Content") or data.get("content") or data.get("Mail_Content") or ""
-        body_full = cls.strip_html(body_content) if body_content else ""
-        body_snippet = body_full[:200] if body_full else ""
+        # Body - Zoho doesn't include body in list response, only snippet
+        body_snippet = data.get("snippet") or ""
+        body_full = ""  # Would need separate API call for full body
 
-        # Parse sent date
+        # Parse sent date - Zoho uses 'sent_time' for emails
         sent_at = cls._parse_email_datetime(
-            data.get("Date_Time") or data.get("Time") or data.get("Sent_Time")
+            data.get("sent_time") or data.get("Sent_Time") or data.get("Date_Time") or data.get("Time")
         )
         if not sent_at:
             sent_at = datetime.utcnow()
 
-        # Determine direction based on activity type or from/to analysis
-        activity_type = data.get("Activity_Type") or data.get("type") or ""
-        if activity_type.lower() in ("sent", "outbound"):
+        # Determine direction - Zoho uses 'sent' boolean (true = outbound from CRM)
+        if data.get("sent") is True:
             direction = "outbound"
-        elif activity_type.lower() in ("received", "inbound"):
+        elif data.get("sent") is False:
             direction = "inbound"
         else:
-            # Heuristic: if from contains our domain, it's outbound
-            direction = "outbound"  # Default assumption
+            # Fallback to activity type
+            activity_type = str(data.get("Activity_Type") or data.get("type") or "")
+            if activity_type.lower() in ("sent", "outbound"):
+                direction = "outbound"
+            elif activity_type.lower() in ("received", "inbound"):
+                direction = "inbound"
+            else:
+                direction = "outbound"  # Default assumption
 
-        # Check for attachments
-        has_attachment = bool(data.get("Has_Attachment") or data.get("Attachments"))
+        # Check for attachments (Zoho uses lowercase)
+        has_attachment = bool(data.get("has_attachment") or data.get("Has_Attachment") or data.get("Attachments"))
 
         # Message ID for threading
         message_id = data.get("Message_Id") or data.get("message_id")
