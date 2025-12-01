@@ -527,10 +527,13 @@ function dashboardApp() {
                 localStorage.removeItem('dashboard_owner_filter');
             }
 
+            // Ensure rawCandidates is an array
+            const candidates = Array.isArray(this.rawCandidates) ? this.rawCandidates : [];
+
             // Filter candidates by recruitment_owner
             const filtered = this.selectedOwner
-                ? this.rawCandidates.filter(c => c.recruitment_owner === this.selectedOwner)
-                : this.rawCandidates;
+                ? candidates.filter(c => c.recruitment_owner === this.selectedOwner)
+                : candidates;
 
             // Calculate filtered stats
             const activeStages = ['New Candidate', 'Screening', 'Interview Scheduled', 'Interview Completed', 'Assessment', 'Onboarding'];
@@ -558,9 +561,10 @@ function dashboardApp() {
                 });
 
             // Filter recent activity
+            const recentActivity = Array.isArray(this.rawRecentActivity) ? this.rawRecentActivity : [];
             this.filteredRecentActivity = this.selectedOwner
-                ? this.rawRecentActivity.filter(a => a.recruitment_owner === this.selectedOwner)
-                : this.rawRecentActivity;
+                ? recentActivity.filter(a => a.recruitment_owner === this.selectedOwner)
+                : recentActivity;
 
             // Update alert counts (filtered by owner where applicable)
             this.updateFilteredAlertCounts();
@@ -573,17 +577,16 @@ function dashboardApp() {
         },
 
         getFilteredAlertCount() {
-            // Filter alerts by recruitment owner
-            return this.rawSystemAlerts.filter(a => {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            return alerts.filter(a => {
                 if (!this.selectedOwner) return true;
-                // Check if alert is related to a candidate owned by selected owner
                 return !a.recruitment_owner || a.recruitment_owner === this.selectedOwner;
             }).length;
         },
 
         getFilteredTodayInterviewCount() {
-            const today = new Date().toDateString();
-            return this.rawSystemAlerts.filter(a => {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            return alerts.filter(a => {
                 if (a.category !== 'upcoming_interviews') return false;
                 if (!this.selectedOwner) return true;
                 return !a.recruitment_owner || a.recruitment_owner === this.selectedOwner;
@@ -591,9 +594,10 @@ function dashboardApp() {
         },
 
         updateFilteredAlertCounts() {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
             const filtered = this.selectedOwner
-                ? this.rawSystemAlerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
-                : this.rawSystemAlerts;
+                ? alerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
+                : alerts;
 
             this.filteredAlertCounts = {
                 total: filtered.length,
@@ -606,9 +610,10 @@ function dashboardApp() {
         },
 
         updateFilteredActionSummary() {
+            const items = Array.isArray(this.rawActionItems) ? this.rawActionItems : [];
             const filtered = this.selectedOwner
-                ? this.rawActionItems.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
-                : this.rawActionItems;
+                ? items.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
+                : items;
 
             this.filteredActionSummary = {
                 total: filtered.length,
@@ -618,26 +623,28 @@ function dashboardApp() {
         },
 
         get filteredAlerts() {
-            let alerts = this.selectedOwner
-                ? this.rawSystemAlerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
-                : this.rawSystemAlerts;
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            let filtered = this.selectedOwner
+                ? alerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
+                : alerts;
 
             if (this.alertFilter) {
-                alerts = alerts.filter(a => a.category === this.alertFilter);
+                filtered = filtered.filter(a => a.category === this.alertFilter);
             }
 
-            return alerts.sort((a, b) => {
+            return filtered.sort((a, b) => {
                 const priority = { high: 0, medium: 1, low: 2 };
                 return (priority[a.priority] || 1) - (priority[b.priority] || 1);
             });
         },
 
         get filteredActionItems() {
-            let items = this.selectedOwner
-                ? this.rawActionItems.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
-                : this.rawActionItems;
+            const items = Array.isArray(this.rawActionItems) ? this.rawActionItems : [];
+            let filtered = this.selectedOwner
+                ? items.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
+                : items;
 
-            return items.sort((a, b) => {
+            return filtered.sort((a, b) => {
                 if (a.is_overdue && !b.is_overdue) return -1;
                 if (!a.is_overdue && b.is_overdue) return 1;
                 return 0;
