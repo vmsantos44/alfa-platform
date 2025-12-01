@@ -249,6 +249,15 @@ class ZohoMailAPI:
         """
         headers = await self._get_headers()
 
+        # Get default from address from account if not specified
+        if not from_address:
+            try:
+                accounts = await self.get_accounts()
+                if accounts.get("data"):
+                    from_address = accounts["data"][0].get("primaryEmailAddress")
+            except Exception:
+                pass
+
         email_data = {
             "toAddress": ",".join(to),
             "subject": subject,
@@ -256,13 +265,15 @@ class ZohoMailAPI:
             "mailFormat": "html" if is_html else "plaintext"
         }
 
+        # fromAddress is required by Zoho Mail API
         if from_address:
             email_data["fromAddress"] = from_address
 
-        if cc:
+        # Only add cc/bcc if they have values (Zoho fails on empty values)
+        if cc and len(cc) > 0:
             email_data["ccAddress"] = ",".join(cc)
 
-        if bcc:
+        if bcc and len(bcc) > 0:
             email_data["bccAddress"] = ",".join(bcc)
 
         response = await self.client.post(
