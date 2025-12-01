@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Alfa Operations Platform** is a unified operations dashboard for interpreter recruitment. It syncs candidate data from Zoho CRM and provides a streamlined interface for managing the recruitment pipeline.
+**Alfa Operations Platform** is a unified operations dashboard for interpreter recruitment. It syncs candidate and interview data from Zoho CRM and provides a streamlined interface for managing the recruitment pipeline, scheduling, and reporting.
 
 - **Live URL**: https://platform.alfacrm.site
 - **Server**: 45.55.32.243:8003
@@ -19,6 +19,7 @@
 | Database | SQLite with SQLAlchemy async (aiosqlite) |
 | Frontend | Jinja2 Templates + Alpine.js + Tailwind CSS |
 | CRM Integration | Zoho CRM API (OAuth 2.0) |
+| Bookings Integration | Zoho Bookings API (separate OAuth client) |
 | Task Scheduler | APScheduler |
 | Charts | Chart.js |
 | Server | Ubuntu with systemd |
@@ -29,9 +30,11 @@
 
 ### 1. Zoho CRM Sync
 - Syncs candidates from Zoho CRM Leads module
+- Syncs interviews from Zoho CRM Events module
 - Maps Zoho `Lead_Status` to 9 pipeline stages
 - Auto-sync every 30 minutes (configurable)
 - Manual sync trigger available
+- SQLite WAL mode for concurrent access
 
 ### 2. Candidate Pipeline
 - **Pipeline View**: Kanban-style board with drag indicators
@@ -58,8 +61,25 @@
 - Candidates by owner chart
 - Recent activity feed
 
-### 6. Auto-Sync Scheduler
+### 6. Scheduling Module (`/scheduling`)
+- **Calendar View**: Monthly calendar with interview events
+- **Today's Interviews**: Sidebar showing today's scheduled interviews with quick actions
+- **No-Shows Section**:
+  - Filterable by date range (7, 30, 90 days, all time)
+  - Pagination with "Load More"
+  - Pending follow-up checkbox
+  - Reschedule and Follow-up Sent actions
+- **Stats Cards**: Today count, This Week, No-Shows (30d), Completion Rate
+- **Interview Management**: Create, complete, mark no-show, reschedule
+
+### 7. Reports Module (`/reports`)
+- Weekly Summary with stats
+- Interview metrics
+- No-show tracking
+
+### 8. Auto-Sync Scheduler
 - Configurable interval (5 min to 24 hours)
+- Syncs both candidates AND interviews
 - Start/Stop from Settings page
 - Shows next sync time, last sync results
 - Prevents overlapping syncs
@@ -74,7 +94,7 @@ alfa-platform/
 │   ├── main.py                 # FastAPI app, routes, lifespan
 │   ├── config.py               # Environment configuration
 │   ├── core/
-│   │   └── database.py         # SQLAlchemy async setup
+│   │   └── database.py         # SQLAlchemy async setup, WAL mode
 │   ├── models/
 │   │   ├── database_models.py  # SQLAlchemy models
 │   │   └── schemas.py          # Pydantic schemas
@@ -82,20 +102,24 @@ alfa-platform/
 │   │   ├── candidates.py       # Candidate CRUD, pipeline, notes
 │   │   ├── dashboard.py        # Dashboard stats, analytics
 │   │   ├── sync.py             # Sync + scheduler endpoints
-│   │   ├── interviews.py       # Interview management
+│   │   ├── interviews.py       # Interview CRUD, no-show tracking
+│   │   ├── reports.py          # Reports and analytics
 │   │   └── ...
 │   ├── services/
-│   │   ├── sync.py             # Zoho sync logic
+│   │   ├── sync.py             # Zoho sync logic (candidates + interviews)
 │   │   └── scheduler.py        # APScheduler service
 │   └── integrations/
 │       └── zoho/
 │           ├── auth.py         # OAuth 2.0 token management
-│           └── crm.py          # Zoho CRM API client
+│           ├── crm.py          # Zoho CRM API client
+│           └── bookings.py     # Zoho Bookings API client (separate OAuth)
 ├── templates/
 │   ├── base.html               # Base layout with sidebar
 │   ├── dashboard.html          # Dashboard with charts
 │   ├── candidates.html         # Pipeline/list views
 │   ├── candidate_detail.html   # Full candidate profile
+│   ├── scheduling.html         # Interview calendar and no-show tracking
+│   ├── reports.html            # Reports and analytics
 │   ├── settings.html           # Settings + auto-sync controls
 │   └── ...
 ├── static/                     # Static assets
@@ -132,6 +156,27 @@ Main candidate table synced from Zoho CRM.
 | offer_accepted | bool | Offer status |
 | ... | ... | Many more fields |
 
+### Interview
+Interview scheduling and tracking (synced from Zoho Events).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | int | Primary key |
+| zoho_event_id | str | Zoho CRM Event ID |
+| candidate_id | int | FK to candidate (nullable) |
+| candidate_name | str | Candidate name |
+| candidate_email | str | Email |
+| scheduled_date | datetime | Interview date/time |
+| duration_minutes | int | Duration (default 30) |
+| interview_type | str | Auto Interview, Initial Screening, etc. |
+| status | str | scheduled, completed, no_show, cancelled |
+| is_no_show | bool | No-show flag |
+| no_show_count | int | Number of no-shows by this candidate |
+| no_show_followup_sent | bool | Follow-up sent flag |
+| reschedule_count | int | Times rescheduled |
+| interviewer | str | Interviewer name |
+| outcome | str | passed, failed, needs_review |
+
 ### CandidateNote
 Internal notes on candidates.
 
@@ -144,8 +189,8 @@ Internal notes on candidates.
 | created_by | str | Author name |
 | created_at | datetime | Timestamp |
 
-### Interview, Task, ActionAlert, SyncLog
-Supporting tables for scheduling, tasks, alerts, and sync tracking.
+### SyncLog, ActionAlert, Task
+Supporting tables for sync tracking, alerts, and tasks.
 
 ---
 
@@ -164,6 +209,21 @@ Supporting tables for scheduling, tasks, alerts, and sync tracking.
 | POST | `/api/candidates/{id}/notes` | Add note |
 | DELETE | `/api/candidates/{id}/notes/{note_id}` | Delete note |
 
+### Interviews
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/interviews/` | List interviews with filters |
+| GET | `/api/interviews/today` | Today's interviews |
+| GET | `/api/interviews/no-shows` | No-shows (with date/pagination filters) |
+| GET | `/api/interviews/no-shows/count` | Count for pagination |
+| GET | `/api/interviews/calendar/{year}/{month}` | Calendar data |
+| GET | `/api/interviews/stats/summary` | Stats (today, week, no-shows, completion rate) |
+| POST | `/api/interviews/` | Create interview |
+| POST | `/api/interviews/{id}/no-show` | Mark as no-show |
+| POST | `/api/interviews/{id}/complete` | Mark as completed |
+| POST | `/api/interviews/{id}/reschedule` | Reschedule |
+| POST | `/api/interviews/{id}/followup-sent` | Mark follow-up sent |
+
 ### Sync & Scheduler
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -172,7 +232,11 @@ Supporting tables for scheduling, tasks, alerts, and sync tracking.
 | POST | `/api/sync/scheduler/stop` | Stop auto-sync |
 | POST | `/api/sync/scheduler/trigger` | Trigger sync now |
 | PUT | `/api/sync/scheduler/interval` | Update sync interval |
-| POST | `/api/sync/candidates` | Manual sync (legacy) |
+| POST | `/api/sync/candidates` | Manual candidate sync |
+| POST | `/api/sync/interviews` | Manual interview sync |
+| GET | `/api/sync/debug-zoho` | Debug Zoho CRM data |
+| GET | `/api/sync/debug-events` | Debug Zoho Events |
+| GET | `/api/sync/debug-bookings` | Debug Zoho Bookings |
 
 ### Dashboard
 | Method | Endpoint | Description |
@@ -186,22 +250,62 @@ Supporting tables for scheduling, tasks, alerts, and sync tracking.
 
 ---
 
-## Zoho CRM Integration
+## Zoho Integration
 
-### Authentication
+### Zoho CRM (Primary)
 - OAuth 2.0 with refresh token
-- Tokens stored in environment variables
-- Auto-refresh on expiry
+- Syncs Leads (candidates) and Events (interviews)
+- Auto-refresh on token expiry
+
+### Zoho Bookings (Separate Client)
+- **Purpose**: Get accurate appointment status (COMPLETED, NO_SHOW, CANCEL)
+- **Status**: Partially implemented - API returning errors
+- **Note**: Has its own OAuth credentials separate from CRM
+- **Location**: `app/integrations/zoho/bookings.py`
 
 ### Environment Variables
 ```env
+# Zoho CRM (primary)
 ZOHO_CLIENT_ID=your_client_id
 ZOHO_CLIENT_SECRET=your_client_secret
 ZOHO_REFRESH_TOKEN=your_refresh_token
-ZOHO_REDIRECT_URI=https://platform.alfacrm.site/oauth/callback
+ZOHO_ORG_ID=815230494
+
+# Zoho Bookings (separate client - optional)
+ZOHO_BOOKINGS_CLIENT_ID=your_bookings_client_id
+ZOHO_BOOKINGS_CLIENT_SECRET=your_bookings_client_secret
+ZOHO_BOOKINGS_REFRESH_TOKEN=your_bookings_refresh_token
+
+# Zoho WorkDrive (future - optional)
+ZOHO_WORKDRIVE_CLIENT_ID=
+ZOHO_WORKDRIVE_CLIENT_SECRET=
+ZOHO_WORKDRIVE_REFRESH_TOKEN=
+
+# Zoho Books (future - optional)
+ZOHO_BOOKS_CLIENT_ID=
+ZOHO_BOOKS_CLIENT_SECRET=
+ZOHO_BOOKS_REFRESH_TOKEN=
+
+# Zoho Mail (future - optional)
+ZOHO_MAIL_CLIENT_ID=
+ZOHO_MAIL_CLIENT_SECRET=
+ZOHO_MAIL_REFRESH_TOKEN=
 ```
 
-### Field Mapping
+### Interview Sync Logic
+The interview sync determines status based on:
+1. **Check_In_Status field** from Zoho Events:
+   - "checked in" or "completed" → `status = "completed"`
+   - "no show" or "absent" → `status = "no_show"`
+   - "cancelled" → `status = "cancelled"`
+2. **Date-based fallback** (if no Check_In_Status):
+   - Event > 7 days old → `status = "completed"` (assumed)
+   - Event < 7 days old and past → `status = "no_show"`
+   - Future event → `status = "scheduled"`
+
+**Known Issue**: Most Zoho Events don't have Check_In_Status populated, so many past events get marked as "no_show". The Zoho Bookings integration was intended to fix this by providing accurate attendance data, but is currently blocked by API issues.
+
+### Field Mapping (Candidates)
 Zoho `Lead_Status` is mapped to pipeline stages:
 
 | Zoho Status | Platform Stage |
@@ -215,6 +319,24 @@ Zoho `Lead_Status` is mapped to pipeline stages:
 | Tier 1, Tier 2, Tier 3 | Active |
 | Lost Lead, Contact in Future | Inactive |
 | Not Qualified, Junk Lead | Rejected |
+
+---
+
+## Database Configuration
+
+### SQLite Optimizations
+The database uses WAL mode and other optimizations for better concurrent access:
+
+```python
+# In app/core/database.py
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")      # Write-Ahead Logging
+    cursor.execute("PRAGMA busy_timeout=30000")    # 30 second lock timeout
+    cursor.execute("PRAGMA synchronous=NORMAL")    # Balance speed/safety
+    cursor.close()
+```
 
 ---
 
@@ -256,11 +378,15 @@ git pull origin vibrant-solomon
 
 # Install new dependencies
 /opt/alfa-platform/venv/bin/pip install -r requirements.txt
+
+# Trigger manual sync
+curl -X POST http://localhost:8003/api/sync/candidates
+curl -X POST http://localhost:8003/api/sync/interviews
 ```
 
 ### Database Location
 - Path: `/opt/alfa-platform/data/alfa_platform.db`
-- Type: SQLite
+- Type: SQLite with WAL mode
 
 ---
 
@@ -292,23 +418,46 @@ uvicorn app.main:app --reload --port 8003
 | File | Purpose |
 |------|---------|
 | `app/main.py` | App entry, page routes, lifespan |
-| `app/services/sync.py` | Zoho sync logic, status mapping |
+| `app/config.py` | All environment variables and settings |
+| `app/core/database.py` | SQLAlchemy setup, WAL mode config |
+| `app/services/sync.py` | Zoho sync logic (candidates + interviews) |
 | `app/services/scheduler.py` | Auto-sync scheduler |
-| `app/routes/candidates.py` | All candidate API endpoints |
-| `templates/candidates.html` | Pipeline/list views |
-| `templates/candidate_detail.html` | Candidate profile page |
-| `templates/settings.html` | Settings + sync controls |
+| `app/routes/candidates.py` | Candidate API endpoints |
+| `app/routes/interviews.py` | Interview API endpoints |
+| `app/integrations/zoho/crm.py` | Zoho CRM API client |
+| `app/integrations/zoho/bookings.py` | Zoho Bookings API client |
+| `templates/scheduling.html` | Scheduling page with calendar |
+
+---
+
+## Known Issues & Pending Work
+
+### 1. Zoho Bookings Integration (Blocked)
+- **Issue**: API returns "EXECUTION ERROR :: Error setting value for the variable:'data' Invalid JSON Format String"
+- **Attempted**: Changed from JSON to form-data, tried different scopes
+- **Status**: Need to verify with Zoho CRM admin
+- **Purpose**: Would provide accurate NO_SHOW/COMPLETED status instead of inferring from dates
+
+### 2. Completion Rate Data Quality
+- **Issue**: Completion rate may be inaccurate because Zoho Events often lack Check_In_Status
+- **Current behavior**: Events without check-in status are marked as no-show if < 7 days old
+- **Solution**: Either populate Check_In_Status in Zoho or complete Bookings integration
+
+### 3. No-Show Count Migration
+- **Issue**: Existing interviews have `no_show_count = 0` because previous sync didn't set it
+- **Solution**: After deploying latest code, re-sync interviews to populate counts
 
 ---
 
 ## Future Enhancements
 
-1. **Scheduling Module** - Interview calendar, training calendar
-2. **Reports Module** - CSV/Excel export, pipeline metrics
-3. **Bulk Actions** - Multi-select candidates for bulk operations
-4. **Notifications** - Email alerts for stuck candidates, upcoming interviews
-5. **Documents Tab** - File upload/management
-6. **User Authentication** - Login system, role-based access
+1. **Zoho Bookings Integration** - Complete integration for accurate attendance data
+2. **Bulk Actions** - Multi-select candidates for bulk operations
+3. **Notifications** - Email alerts for stuck candidates, upcoming interviews
+4. **Documents Tab** - File upload/management via Zoho WorkDrive
+5. **User Authentication** - Login system, role-based access
+6. **AI Chat Assistant** - Integrated chat for operational assistance
+7. **Billing Module** - Invoice and payment tracking via Zoho Books
 
 ---
 
@@ -318,16 +467,55 @@ uvicorn app.main:app --reload --port 8003
 1. Check Zoho OAuth tokens in environment
 2. Test API: `curl http://localhost:8003/api/sync/scheduler/status`
 3. Check logs: `journalctl -u alfa-platform -f`
+4. Debug Zoho data: Visit `/api/sync/debug-zoho` or `/api/sync/debug-events`
 
 ### Database Issues
 1. Database location: `/opt/alfa-platform/data/alfa_platform.db`
 2. Backup: `cp alfa_platform.db alfa_platform.db.backup`
-3. Reset: Delete DB file, restart service (tables auto-create)
+3. Check WAL files: `ls -la data/` (should see .db, .db-wal, .db-shm)
+4. Reset: Delete DB file, restart service (tables auto-create)
+
+### Database Locked Errors
+1. WAL mode should prevent most issues
+2. Check for long-running queries
+3. Increase busy_timeout if needed (currently 30 seconds)
 
 ### Service Won't Start
 1. Check syntax: `python -m py_compile app/main.py`
 2. Check dependencies: `/opt/alfa-platform/venv/bin/pip install -r requirements.txt`
 3. Check logs: `journalctl -u alfa-platform --no-pager -n 50`
+
+### High No-Show Numbers
+1. This is expected behavior due to sync logic
+2. Events without Check_In_Status are marked as no-show
+3. To fix: Either update Check_In_Status in Zoho or complete Bookings integration
+
+---
+
+## Recent Changes (December 2025)
+
+### Interview Sync
+- Added `sync_interviews_from_zoho()` in sync.py
+- Syncs from Zoho CRM Events module
+- Identifies interviews by keywords in event title
+- Sets status based on Check_In_Status or date
+
+### Scheduling Page UI
+- Stats cards with icons and colored borders
+- Today's Interviews with better card design
+- No-Shows section with filtering (7/30/90 days)
+- Pagination with "Load More"
+- Scrollable containers
+
+### Database Improvements
+- SQLite WAL mode for concurrent access
+- 30-second busy timeout
+- Connection health checks
+
+### Zoho Multi-Client Architecture
+- Config supports separate OAuth credentials per Zoho product
+- Bookings client implemented (API issues pending)
+- Ready for WorkDrive, Books, Mail integration
 
 ---
 
@@ -339,4 +527,4 @@ For questions about this codebase, refer to:
 
 ---
 
-*Last Updated: November 30, 2025*
+*Last Updated: December 1, 2025*
