@@ -1101,16 +1101,17 @@ async def get_email_content(
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    # If we already have body content, return it
+    # If we already have HTML content cached, return it
     if email.body_full:
-        # Check if it's HTML or plain text
         is_html = email.body_full.strip().startswith('<') or '<html' in email.body_full.lower()
-        return {
-            "id": email.id,
-            "content": email.body_snippet or SyncService.strip_html(email.body_full)[:200],
-            "html_content": email.body_full if is_html else None,
-            "cached": True
-        }
+        if is_html:
+            return {
+                "id": email.id,
+                "content": email.body_snippet or SyncService.strip_html(email.body_full)[:200],
+                "html_content": email.body_full,
+                "cached": True
+            }
+        # If cached as plain text, re-fetch to get HTML
 
     # Fetch content from Zoho
     from app.integrations.zoho.crm import ZohoCRM
