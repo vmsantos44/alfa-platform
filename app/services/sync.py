@@ -671,15 +671,18 @@ class SyncService:
         )
         existing = result.scalar_one_or_none()
 
-        # Parse date helpers
+        # Parse date helpers - strip timezone to naive UTC for consistency
         def parse_datetime(value):
             if not value:
                 return None
             try:
                 if isinstance(value, datetime):
-                    return value
+                    # Strip timezone if present
+                    return value.replace(tzinfo=None) if value.tzinfo else value
                 # Try ISO format
-                return datetime.fromisoformat(value.replace("Z", "+00:00").replace(" ", "T"))
+                dt = datetime.fromisoformat(value.replace("Z", "+00:00").replace(" ", "T"))
+                # Strip timezone to make naive (consistent with rest of codebase)
+                return dt.replace(tzinfo=None) if dt.tzinfo else dt
             except (ValueError, AttributeError):
                 return None
 
