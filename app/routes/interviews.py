@@ -518,23 +518,30 @@ async def get_interview_stats(db: AsyncSession = Depends(get_db)):
     )
     no_shows = no_show_result.scalar() or 0
 
-    # Completion rate
+    # Completion rate - only count PAST interviews (not future scheduled ones)
     completed_result = await db.execute(
         select(func.count(Interview.id))
         .where(and_(
             Interview.status == "completed",
-            Interview.scheduled_date >= month_ago
+            Interview.scheduled_date >= month_ago,
+            Interview.scheduled_date <= now
         ))
     )
     completed = completed_result.scalar() or 0
 
-    scheduled_result = await db.execute(
+    # Count past interviews only (scheduled_date <= now) - excludes future appointments
+    past_interviews_result = await db.execute(
         select(func.count(Interview.id))
-        .where(Interview.scheduled_date >= month_ago)
+        .where(and_(
+            Interview.scheduled_date >= month_ago,
+            Interview.scheduled_date <= now
+        ))
     )
-    scheduled = scheduled_result.scalar() or 0
+    past_interviews = past_interviews_result.scalar() or 0
 
-    completion_rate = (completed / scheduled * 100) if scheduled > 0 else 0
+    # Completion rate = completed / (completed + no_shows) for past events
+    # If no past interviews, show 0%
+    completion_rate = (completed / past_interviews * 100) if past_interviews > 0 else 0
 
     return {
         "total_interviews": total,

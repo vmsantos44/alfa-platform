@@ -777,7 +777,12 @@ class SyncService:
             existing.zoho_candidate_id = zoho_candidate_id
             existing.interviewer = interviewer
             existing.status = status
-            existing.is_no_show = is_no_show
+            # Only update is_no_show if changing to True (don't reset count)
+            if is_no_show and not existing.is_no_show:
+                existing.is_no_show = True
+                existing.no_show_count = (existing.no_show_count or 0) + 1
+            elif not is_no_show:
+                existing.is_no_show = False
             existing.notes = data.get("Description")
             existing.updated_at = datetime.utcnow()
 
@@ -794,6 +799,7 @@ class SyncService:
                 interview_type=interview_type,
                 status=status,
                 is_no_show=is_no_show,
+                no_show_count=1 if is_no_show else 0,
                 interviewer=interviewer,
                 notes=data.get("Description")
             )
