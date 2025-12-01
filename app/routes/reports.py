@@ -216,6 +216,56 @@ async def get_candidate_status_distribution(
     return {"statuses": statuses, "total_unique_statuses": len(statuses)}
 
 
+@router.get("/debug/date-fields")
+async def get_date_fields_debug(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Debug endpoint: Check zoho_created_time population
+    """
+    # Count candidates with zoho_created_time
+    with_created = await db.execute(
+        select(func.count(CandidateCache.id))
+        .where(CandidateCache.zoho_created_time.isnot(None))
+    )
+    with_created_count = with_created.scalar() or 0
+
+    # Count total
+    total = await db.execute(select(func.count(CandidateCache.id)))
+    total_count = total.scalar() or 0
+
+    # Get date range of zoho_created_time
+    date_range = await db.execute(
+        select(
+            func.min(CandidateCache.zoho_created_time),
+            func.max(CandidateCache.zoho_created_time)
+        )
+    )
+    min_date, max_date = date_range.one()
+
+    # Count candidates created in last 30 days
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    recent = await db.execute(
+        select(func.count(CandidateCache.id))
+        .where(CandidateCache.zoho_created_time >= thirty_days_ago)
+    )
+    recent_count = recent.scalar() or 0
+
+    # Count interviews
+    interview_count = await db.execute(select(func.count(Interview.id)))
+    interviews = interview_count.scalar() or 0
+
+    return {
+        "total_candidates": total_count,
+        "with_zoho_created_time": with_created_count,
+        "without_zoho_created_time": total_count - with_created_count,
+        "earliest_created": min_date.isoformat() if min_date else None,
+        "latest_created": max_date.isoformat() if max_date else None,
+        "created_last_30_days": recent_count,
+        "total_interviews": interviews
+    }
+
+
 # ============================================
 # Recruiter Performance Report
 # ============================================
