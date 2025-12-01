@@ -265,7 +265,7 @@ async def debug_zoho_bookings():
         raw_response = await bookings_api.client.post(
             "https://www.zohoapis.com/bookings/v1/json/fetchappointment",
             headers=headers,
-            json={}  # Empty payload = today's appointments
+            data={}  # Form-data: Empty = today's appointments
         )
 
         raw_data = raw_response.json() if raw_response.status_code == 200 else {"error": raw_response.text}

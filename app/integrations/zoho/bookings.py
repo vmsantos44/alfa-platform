@@ -99,7 +99,7 @@ class ZohoBookingsAPI:
         token = await self.get_access_token()
         return {
             "Authorization": f"Zoho-oauthtoken {token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/x-www-form-urlencoded"
         }
 
     @api_retry
@@ -152,7 +152,7 @@ class ZohoBookingsAPI:
             response = await self.client.post(
                 f"{self.settings.zoho_api_domain}/bookings/v1/json/fetchappointment",
                 headers=headers,
-                json=payload
+                data=payload  # Form-data, not JSON
             )
 
             if response.status_code == 204:
@@ -198,7 +198,7 @@ class ZohoBookingsAPI:
             response = await self.client.post(
                 f"{self.settings.zoho_api_domain}/bookings/v1/json/getappointment",
                 headers=headers,
-                json={"booking_id": booking_id}
+                data={"booking_id": booking_id}  # Form-data, not JSON
             )
             response.raise_for_status()
             return response.json()
