@@ -379,8 +379,9 @@ class CandidateEmail(Base):
 
     # Email content
     subject: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    body_snippet: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # First ~200 chars
-    body_full: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Full body (HTML stripped)
+    body_snippet: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # First ~200 chars plain text
+    body_full: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Full body as plain text
+    html_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Original HTML body for rendering
 
     # Timestamps from Zoho
     sent_at: Mapped[datetime] = mapped_column(DateTime, index=True)  # When email was sent/received

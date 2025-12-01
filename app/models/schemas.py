@@ -328,8 +328,9 @@ class CandidateEmailResponse(BaseModel):
     to_address: str
     cc_address: Optional[str] = None
     subject: Optional[str] = None
-    body_snippet: Optional[str] = None
-    body_full: Optional[str] = None
+    body_snippet: Optional[str] = None  # Plain text preview (first ~200 chars)
+    body_full: Optional[str] = None  # Full plain text content
+    html_body: Optional[str] = None  # Original HTML for rendering in iframe
     sent_at: datetime
     has_attachment: bool = False
     message_id: Optional[str] = None
