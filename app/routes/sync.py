@@ -377,6 +377,45 @@ async def debug_zoho_bookings():
         raise HTTPException(status_code=500, detail=f"Debug bookings failed: {str(e)}")
 
 
+@router.get("/debug-emails")
+async def debug_zoho_emails(
+    zoho_id: str = Query(..., description="Zoho candidate/lead ID to check emails for"),
+    module: str = Query("Leads", description="Module (Leads or Contacts)")
+):
+    """
+    Debug endpoint to check raw Zoho CRM Emails data for a specific record.
+    """
+    from app.integrations.zoho.crm import ZohoCRM
+
+    try:
+        crm = ZohoCRM()
+
+        # Try to get emails for this record
+        response = await crm.get_emails_for_record(
+            module=module,
+            record_id=zoho_id,
+            page=1,
+            per_page=20
+        )
+
+        emails = response.get("data", [])
+
+        return {
+            "zoho_id": zoho_id,
+            "module": module,
+            "total_emails": len(emails),
+            "sample_emails": emails[:5],
+            "info": response.get("info", {}),
+            "raw_response_keys": list(response.keys()) if response else []
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "zoho_id": zoho_id,
+            "module": module
+        }
+
+
 @router.get("/debug-tasks")
 async def debug_zoho_tasks():
     """
