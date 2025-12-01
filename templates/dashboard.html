@@ -77,9 +77,10 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                     <h2 class="text-lg font-semibold text-gray-800">ACTION REQUIRED</h2>
+                    <span x-show="actionSummary.urgent > 0" class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full" x-text="actionSummary.urgent + ' urgent'"></span>
                 </div>
                 <button
-                    @click="refreshAlerts()"
+                    @click="refreshActionItems()"
                     class="text-sm text-alfa-blue hover:underline"
                 >
                     Refresh
@@ -87,54 +88,90 @@
             </div>
 
             <div class="p-4">
+                <!-- Loading State -->
+                <div x-show="actionItemsLoading" class="text-center py-8 text-gray-400">
+                    <svg class="animate-spin h-8 w-8 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-sm mt-2">Loading tasks...</p>
+                </div>
+
                 <!-- Empty State -->
-                <div x-show="alerts.length === 0" class="text-center py-8 text-gray-500">
+                <div x-show="!actionItemsLoading && actionItems.length === 0" class="text-center py-8 text-gray-500">
                     <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     <p>No pending actions - you're all caught up!</p>
+                    <p class="text-xs mt-1">Tasks will appear here after syncing from Zoho</p>
                 </div>
 
-                <!-- Alert List -->
-                <ul class="space-y-3" x-show="alerts.length > 0">
-                    <template x-for="alert in alerts" :key="alert.id">
-                        <li class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                            <div class="flex items-center gap-3">
-                                <!-- Priority Indicator -->
-                                <span
-                                    class="w-2 h-2 rounded-full"
-                                    :class="{
-                                        'bg-red-500': alert.priority === 'high',
-                                        'bg-yellow-500': alert.priority === 'medium',
-                                        'bg-blue-500': alert.priority === 'low'
-                                    }"
-                                ></span>
+                <!-- Task List -->
+                <ul class="space-y-3 max-h-[400px] overflow-y-auto" x-show="!actionItemsLoading && actionItems.length > 0">
+                    <template x-for="task in actionItems" :key="task.id">
+                        <li
+                            class="flex items-start justify-between p-3 rounded-lg transition-colors"
+                            :class="{
+                                'bg-red-50 border border-red-200': task.is_overdue,
+                                'bg-amber-50 border border-amber-200': task.is_due_today && !task.is_overdue,
+                                'bg-gray-50 border border-gray-100': !task.is_overdue && !task.is_due_today
+                            }"
+                        >
+                            <div class="flex items-start gap-3 flex-1 min-w-0">
+                                <!-- Priority/Status Indicator -->
+                                <div class="flex flex-col items-center gap-1 pt-1">
+                                    <span
+                                        class="w-2 h-2 rounded-full"
+                                        :class="{
+                                            'bg-red-500': task.priority === 'high' || task.is_overdue,
+                                            'bg-amber-500': task.priority === 'medium' || task.is_due_today,
+                                            'bg-blue-500': task.priority === 'low'
+                                        }"
+                                    ></span>
+                                </div>
 
-                                <div>
-                                    <p class="font-medium text-gray-800" x-text="alert.title"></p>
-                                    <p class="text-sm text-gray-500" x-text="alert.description || 'No description'"></p>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <p class="font-medium text-gray-800" x-text="task.title"></p>
+                                        <span
+                                            x-show="task.is_overdue"
+                                            class="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium"
+                                        >OVERDUE</span>
+                                        <span
+                                            x-show="task.is_due_today && !task.is_overdue"
+                                            class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium"
+                                        >DUE TODAY</span>
+                                    </div>
+                                    <p x-show="task.candidate_name" class="text-sm text-gray-600 mt-0.5">
+                                        <span class="text-gray-400">Related:</span> <span x-text="task.candidate_name"></span>
+                                    </p>
+                                    <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                        <span x-show="task.due_date" x-text="'Due: ' + formatTaskDate(task.due_date)"></span>
+                                        <span x-show="task.assigned_to" class="text-gray-400">•</span>
+                                        <span x-show="task.assigned_to" x-text="task.assigned_to"></span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-2">
-                                <!-- Alert Type Badge -->
+                            <div class="flex items-center gap-2 ml-2">
+                                <!-- Task Type Badge -->
                                 <span
-                                    class="text-xs px-2 py-1 rounded-full"
+                                    class="text-xs px-2 py-1 rounded-full whitespace-nowrap"
                                     :class="{
-                                        'bg-red-100 text-red-700': alert.alert_type === 'no_show',
-                                        'bg-orange-100 text-orange-700': alert.alert_type === 'stuck_pipeline',
-                                        'bg-yellow-100 text-yellow-700': alert.alert_type === 'overdue_task',
-                                        'bg-blue-100 text-blue-700': alert.alert_type === 'unresponsive',
-                                        'bg-purple-100 text-purple-700': alert.alert_type === 'expired_document'
+                                        'bg-blue-100 text-blue-700': task.task_type === 'follow_up',
+                                        'bg-purple-100 text-purple-700': task.task_type === 'document_request',
+                                        'bg-green-100 text-green-700': task.task_type === 'assessment',
+                                        'bg-orange-100 text-orange-700': task.task_type === 'training',
+                                        'bg-gray-100 text-gray-700': task.task_type === 'general'
                                     }"
-                                    x-text="formatAlertType(alert.alert_type)"
+                                    x-text="formatTaskType(task.task_type)"
                                 ></span>
 
-                                <!-- Resolve Button -->
+                                <!-- Complete Button -->
                                 <button
-                                    @click="resolveAlert(alert.id)"
-                                    class="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-                                    title="Mark as resolved"
+                                    @click="completeTask(task.id)"
+                                    class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Mark as completed"
                                 >
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -144,6 +181,15 @@
                         </li>
                     </template>
                 </ul>
+
+                <!-- Summary Footer -->
+                <div x-show="!actionItemsLoading && actionItems.length > 0" class="mt-4 pt-3 border-t flex items-center justify-between text-sm">
+                    <span class="text-gray-500">
+                        <span x-text="actionSummary.total"></span> open tasks
+                        <span x-show="actionSummary.overdue > 0" class="text-red-600 ml-2">(<span x-text="actionSummary.overdue"></span> overdue)</span>
+                    </span>
+                    <a href="#" class="text-alfa-blue hover:underline">View All Tasks</a>
+                </div>
             </div>
         </div>
 
@@ -308,6 +354,9 @@ function dashboardApp() {
             active: 0
         },
         alerts: [],
+        actionItems: [],
+        actionItemsLoading: false,
+        actionSummary: { total: 0, overdue: 0, due_today: 0, urgent: 0 },
         schedule: [],
         pipeline: [],
         recentActivity: [],
@@ -316,9 +365,70 @@ function dashboardApp() {
 
         async init() {
             await this.fetchDashboard();
+            await this.fetchActionItems();
             await this.fetchChartData();
             await this.fetchRecentActivity();
             this.loading = false;
+        },
+
+        async fetchActionItems() {
+            this.actionItemsLoading = true;
+            try {
+                const response = await fetch('/api/tasks/action-required?limit=15');
+                const data = await response.json();
+                this.actionItems = data.items || [];
+                this.actionSummary = data.summary || { total: 0, overdue: 0, due_today: 0, urgent: 0 };
+                this.actionSummary.urgent = (this.actionSummary.overdue || 0) + (this.actionSummary.due_today || 0);
+            } catch (error) {
+                console.error('Failed to fetch action items:', error);
+                this.actionItems = [];
+            } finally {
+                this.actionItemsLoading = false;
+            }
+        },
+
+        async refreshActionItems() {
+            await this.fetchActionItems();
+        },
+
+        async completeTask(taskId) {
+            try {
+                const response = await fetch(`/api/tasks/${taskId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (response.ok) {
+                    // Remove from list
+                    this.actionItems = this.actionItems.filter(t => t.id !== taskId);
+                    this.actionSummary.total = Math.max(0, this.actionSummary.total - 1);
+                }
+            } catch (error) {
+                console.error('Failed to complete task:', error);
+            }
+        },
+
+        formatTaskDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            if (date.toDateString() === today.toDateString()) return 'Today';
+            if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        },
+
+        formatTaskType(type) {
+            const types = {
+                'follow_up': 'Follow Up',
+                'document_request': 'Documents',
+                'assessment': 'Assessment',
+                'training': 'Training',
+                'general': 'General'
+            };
+            return types[type] || type;
         },
 
         async fetchDashboard() {
