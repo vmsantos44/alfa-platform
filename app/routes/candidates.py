@@ -1066,6 +1066,80 @@ async def get_candidate_email_detail(
     )
 
 
+@router.get("/{candidate_id}/emails/{email_id}/content")
+async def get_email_content(
+    candidate_id: int,
+    email_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Fetch full email content from Zoho CRM on-demand.
+    The email list API doesn't return body content, so we fetch it separately.
+    """
+    # Get candidate
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Get the email record
+    email_result = await db.execute(
+        select(CandidateEmail)
+        .where(
+            and_(
+                CandidateEmail.id == email_id,
+                CandidateEmail.zoho_candidate_id == candidate.zoho_id
+            )
+        )
+    )
+    email = email_result.scalar_one_or_none()
+
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    # If we already have body content, return it
+    if email.body_full:
+        return {
+            "id": email.id,
+            "content": email.body_full,
+            "cached": True
+        }
+
+    # Fetch content from Zoho
+    from app.integrations.zoho.crm import ZohoCRM
+    from app.services.sync import SyncService
+
+    try:
+        crm = ZohoCRM()
+        email_data = await crm.get_email_content(
+            module=candidate.zoho_module,
+            record_id=candidate.zoho_id,
+            message_id=email.message_id
+        )
+
+        # Extract and clean content
+        content = email_data.get("content") or email_data.get("Content") or ""
+        if content:
+            content = SyncService.strip_html(content)
+
+            # Cache the content in the database
+            email.body_full = content
+            email.body_snippet = content[:200] if content else ""
+            await db.commit()
+
+        return {
+            "id": email.id,
+            "content": content,
+            "cached": False
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch email content: {str(e)}")
+
+
 @router.get("/{candidate_id}/email-thread", response_model=EmailThreadResponse)
 async def get_candidate_email_thread(
     candidate_id: int,
