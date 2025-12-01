@@ -221,35 +221,36 @@ async def get_date_fields_debug(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Debug endpoint: Check zoho_created_time population
+    Debug endpoint: Check date field population
     """
-    # Count candidates with zoho_created_time
-    with_created = await db.execute(
-        select(func.count(CandidateCache.id))
-        .where(CandidateCache.zoho_created_time.isnot(None))
-    )
-    with_created_count = with_created.scalar() or 0
-
-    # Count total
     total = await db.execute(select(func.count(CandidateCache.id)))
     total_count = total.scalar() or 0
 
-    # Get date range of zoho_created_time
+    # Check various date fields
+    fields_to_check = [
+        ("zoho_created_time", CandidateCache.zoho_created_time),
+        ("zoho_modified_time", CandidateCache.zoho_modified_time),
+        ("last_activity_date", CandidateCache.last_activity_date),
+        ("stage_entered_date", CandidateCache.stage_entered_date),
+        ("last_synced", CandidateCache.last_synced),
+    ]
+
+    field_stats = {}
+    for field_name, field in fields_to_check:
+        count = await db.execute(
+            select(func.count(CandidateCache.id))
+            .where(field.isnot(None))
+        )
+        field_stats[field_name] = count.scalar() or 0
+
+    # Get date range for last_synced (most likely to be populated)
     date_range = await db.execute(
         select(
-            func.min(CandidateCache.zoho_created_time),
-            func.max(CandidateCache.zoho_created_time)
+            func.min(CandidateCache.last_synced),
+            func.max(CandidateCache.last_synced)
         )
     )
-    min_date, max_date = date_range.one()
-
-    # Count candidates created in last 30 days
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    recent = await db.execute(
-        select(func.count(CandidateCache.id))
-        .where(CandidateCache.zoho_created_time >= thirty_days_ago)
-    )
-    recent_count = recent.scalar() or 0
+    min_sync, max_sync = date_range.one()
 
     # Count interviews
     interview_count = await db.execute(select(func.count(Interview.id)))
@@ -257,11 +258,11 @@ async def get_date_fields_debug(
 
     return {
         "total_candidates": total_count,
-        "with_zoho_created_time": with_created_count,
-        "without_zoho_created_time": total_count - with_created_count,
-        "earliest_created": min_date.isoformat() if min_date else None,
-        "latest_created": max_date.isoformat() if max_date else None,
-        "created_last_30_days": recent_count,
+        "field_population": field_stats,
+        "last_synced_range": {
+            "earliest": min_sync.isoformat() if min_sync else None,
+            "latest": max_sync.isoformat() if max_sync else None
+        },
         "total_interviews": interviews
     }
 
