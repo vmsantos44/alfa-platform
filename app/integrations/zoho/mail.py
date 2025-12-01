@@ -133,9 +133,7 @@ class ZohoMailAPI:
         self,
         folder_id: Optional[str] = None,
         limit: int = 50,
-        start: int = 0,
-        sort_by: str = "date",
-        sort_order: str = "desc"
+        start: int = 0
     ) -> Dict[str, Any]:
         """
         Get emails from a folder
@@ -144,8 +142,6 @@ class ZohoMailAPI:
             folder_id: Folder ID (if None, gets from inbox)
             limit: Number of emails to fetch (max 200)
             start: Offset for pagination
-            sort_by: Sort field (date, subject, from)
-            sort_order: asc or desc
         """
         headers = await self._get_headers()
 
