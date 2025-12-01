@@ -69,14 +69,149 @@
             </div>
         </div>
 
-        <!-- Action Required Section -->
+        <!-- System Alerts Section -->
+        <div class="bg-white rounded-xl shadow-sm mb-6">
+            <div class="p-4 border-b flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                    <h2 class="text-lg font-semibold text-gray-800">SYSTEM ALERTS</h2>
+                    <span x-show="alertCounts.total > 0" class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full" x-text="alertCounts.total + ' alerts'"></span>
+                </div>
+                <button @click="fetchSystemAlerts()" class="text-sm text-alfa-blue hover:underline">Refresh</button>
+            </div>
+
+            <div class="p-4">
+                <!-- Loading State -->
+                <div x-show="systemAlertsLoading" class="text-center py-6 text-gray-400">
+                    <svg class="animate-spin h-6 w-6 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+
+                <!-- Empty State -->
+                <div x-show="!systemAlertsLoading && systemAlerts.length === 0" class="text-center py-6 text-gray-500">
+                    <svg class="w-10 h-10 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm">No system alerts</p>
+                </div>
+
+                <!-- Alert Categories -->
+                <div x-show="!systemAlertsLoading && systemAlerts.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                    <!-- Upcoming Interviews -->
+                    <div class="bg-blue-50 rounded-lg p-3 cursor-pointer hover:bg-blue-100 transition-colors"
+                         @click="filterAlertCategory('upcoming_interviews')"
+                         :class="{'ring-2 ring-blue-500': alertFilter === 'upcoming_interviews'}">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <span class="text-sm font-medium text-blue-800">Today's Interviews</span>
+                        </div>
+                        <p class="text-2xl font-bold text-blue-700 mt-1" x-text="alertCounts.today_interviews || 0"></p>
+                    </div>
+
+                    <!-- No-Shows -->
+                    <div class="bg-red-50 rounded-lg p-3 cursor-pointer hover:bg-red-100 transition-colors"
+                         @click="filterAlertCategory('no_shows')"
+                         :class="{'ring-2 ring-red-500': alertFilter === 'no_shows'}">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                            </svg>
+                            <span class="text-sm font-medium text-red-800">No-Shows</span>
+                        </div>
+                        <p class="text-2xl font-bold text-red-700 mt-1" x-text="alertCounts.no_shows || 0"></p>
+                    </div>
+
+                    <!-- Stuck Candidates -->
+                    <div class="bg-amber-50 rounded-lg p-3 cursor-pointer hover:bg-amber-100 transition-colors"
+                         @click="filterAlertCategory('stuck_candidates')"
+                         :class="{'ring-2 ring-amber-500': alertFilter === 'stuck_candidates'}">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-sm font-medium text-amber-800">Stuck</span>
+                        </div>
+                        <p class="text-2xl font-bold text-amber-700 mt-1" x-text="alertCounts.stuck_candidates || 0"></p>
+                    </div>
+
+                    <!-- Overdue Assessments -->
+                    <div class="bg-purple-50 rounded-lg p-3 cursor-pointer hover:bg-purple-100 transition-colors"
+                         @click="filterAlertCategory('overdue_assessments')"
+                         :class="{'ring-2 ring-purple-500': alertFilter === 'overdue_assessments'}">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            <span class="text-sm font-medium text-purple-800">Assessments</span>
+                        </div>
+                        <p class="text-2xl font-bold text-purple-700 mt-1" x-text="alertCounts.overdue_assessments || 0"></p>
+                    </div>
+
+                    <!-- Pending Documents -->
+                    <div class="bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors"
+                         @click="filterAlertCategory('pending_documents')"
+                         :class="{'ring-2 ring-gray-500': alertFilter === 'pending_documents'}">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <span class="text-sm font-medium text-gray-800">Documents</span>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-700 mt-1" x-text="alertCounts.pending_documents || 0"></p>
+                    </div>
+                </div>
+
+                <!-- Filtered Alert List -->
+                <div x-show="!systemAlertsLoading && filteredAlerts.length > 0" class="max-h-[300px] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-500" x-text="getAlertCategoryLabel(alertFilter)"></span>
+                        <button x-show="alertFilter" @click="alertFilter = null" class="text-xs text-gray-500 hover:text-gray-700">Clear filter</button>
+                    </div>
+                    <ul class="space-y-2">
+                        <template x-for="alert in filteredAlerts" :key="alert.id">
+                            <li class="flex items-center justify-between p-3 rounded-lg border"
+                                :class="{
+                                    'bg-red-50 border-red-200': alert.priority === 'high',
+                                    'bg-amber-50 border-amber-200': alert.priority === 'medium',
+                                    'bg-gray-50 border-gray-200': alert.priority === 'low'
+                                }">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-2 h-2 rounded-full"
+                                         :class="{
+                                             'bg-red-500': alert.priority === 'high',
+                                             'bg-amber-500': alert.priority === 'medium',
+                                             'bg-gray-400': alert.priority === 'low'
+                                         }"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium text-gray-800 truncate" x-text="alert.title"></p>
+                                        <p class="text-sm text-gray-500 truncate" x-text="alert.description"></p>
+                                    </div>
+                                </div>
+                                <a x-show="alert.action_url"
+                                   :href="alert.action_url"
+                                   class="ml-2 px-3 py-1 text-sm bg-white border rounded hover:bg-gray-50 transition-colors whitespace-nowrap"
+                                   x-text="alert.action_label || 'View'"></a>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Required Section (Tasks) -->
         <div class="bg-white rounded-xl shadow-sm mb-6">
             <div class="p-4 border-b flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
-                    <h2 class="text-lg font-semibold text-gray-800">ACTION REQUIRED</h2>
+                    <h2 class="text-lg font-semibold text-gray-800">ZOHO TASKS</h2>
                     <span x-show="actionSummary.urgent > 0" class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full" x-text="actionSummary.urgent + ' urgent'"></span>
                 </div>
                 <button
@@ -357,6 +492,10 @@ function dashboardApp() {
         actionItems: [],
         actionItemsLoading: false,
         actionSummary: { total: 0, overdue: 0, due_today: 0, urgent: 0 },
+        systemAlerts: [],
+        systemAlertsLoading: false,
+        alertCounts: { total: 0, no_shows: 0, today_interviews: 0, stuck_candidates: 0, pending_documents: 0, overdue_assessments: 0 },
+        alertFilter: null,
         schedule: [],
         pipeline: [],
         recentActivity: [],
@@ -365,6 +504,7 @@ function dashboardApp() {
 
         async init() {
             await this.fetchDashboard();
+            await this.fetchSystemAlerts();
             await this.fetchActionItems();
             await this.fetchChartData();
             await this.fetchRecentActivity();
@@ -389,6 +529,79 @@ function dashboardApp() {
 
         async refreshActionItems() {
             await this.fetchActionItems();
+        },
+
+        async fetchSystemAlerts() {
+            this.systemAlertsLoading = true;
+            try {
+                const [alertsRes, countsRes] = await Promise.all([
+                    fetch('/api/alerts/'),
+                    fetch('/api/alerts/counts')
+                ]);
+                const alertsData = await alertsRes.json();
+                const countsData = await countsRes.json();
+
+                // Flatten all alerts into a single array with category info
+                this.systemAlerts = [];
+                if (alertsData.alerts) {
+                    for (const [category, items] of Object.entries(alertsData.alerts)) {
+                        for (const item of items) {
+                            this.systemAlerts.push({ ...item, category });
+                        }
+                    }
+                }
+
+                // Update counts - map from API response
+                this.alertCounts = {
+                    total: countsData.total || 0,
+                    no_shows: countsData.no_shows || 0,
+                    today_interviews: countsData.today_interviews || 0,
+                    stuck_candidates: countsData.stuck_candidates || 0,
+                    pending_documents: countsData.pending_documents || 0,
+                    overdue_assessments: alertsData.summary?.overdue_assessments || 0
+                };
+
+                // Update needs_action stat
+                this.stats.needs_action_count = this.alertCounts.total;
+
+            } catch (error) {
+                console.error('Failed to fetch system alerts:', error);
+                this.systemAlerts = [];
+            } finally {
+                this.systemAlertsLoading = false;
+            }
+        },
+
+        filterAlertCategory(category) {
+            if (this.alertFilter === category) {
+                this.alertFilter = null;
+            } else {
+                this.alertFilter = category;
+            }
+        },
+
+        get filteredAlerts() {
+            if (!this.alertFilter) {
+                // Show top 10 by priority when no filter
+                return this.systemAlerts
+                    .sort((a, b) => {
+                        const priority = { high: 0, medium: 1, low: 2 };
+                        return (priority[a.priority] || 1) - (priority[b.priority] || 1);
+                    })
+                    .slice(0, 10);
+            }
+            return this.systemAlerts.filter(a => a.category === this.alertFilter);
+        },
+
+        getAlertCategoryLabel(filter) {
+            const labels = {
+                'no_shows': 'No-Shows Needing Follow-up',
+                'stuck_candidates': 'Candidates Stuck in Pipeline',
+                'upcoming_interviews': 'Upcoming Interviews',
+                'overdue_assessments': 'Overdue Language Assessments',
+                'pending_documents': 'Pending Document Reviews'
+            };
+            return labels[filter] || 'All Alerts';
         },
 
         async completeTask(taskId) {
