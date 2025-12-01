@@ -1,0 +1,1035 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Alfa Operations Platform{% endblock %}
+
+{% block nav_reports %}bg-gray-700{% endblock %}
+
+{% block page_title %}Reports{% endblock %}
+{% block page_subtitle %}Analytics and recruitment metrics{% endblock %}
+
+{% block content %}
+<div x-data="reportsApp()" x-init="init()">
+
+    <!-- Loading State -->
+    <div x-show="loading" class="flex items-center justify-center h-64">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Reports Content -->
+    <div x-show="!loading" x-cloak>
+
+        <!-- Report Type Tabs -->
+        <div class="bg-white rounded-xl shadow-sm mb-6">
+            <div class="flex border-b overflow-x-auto">
+                <button
+                    @click="activeTab = 'weekly'"
+                    :class="activeTab === 'weekly' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium whitespace-nowrap"
+                >
+                    Weekly Summary
+                </button>
+                <button
+                    @click="activeTab = 'pipeline'"
+                    :class="activeTab === 'pipeline' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium whitespace-nowrap"
+                >
+                    Pipeline Metrics
+                </button>
+                <button
+                    @click="activeTab = 'recruiters'"
+                    :class="activeTab === 'recruiters' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium whitespace-nowrap"
+                >
+                    Recruiter Performance
+                </button>
+                <button
+                    @click="activeTab = 'sources'"
+                    :class="activeTab === 'sources' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium whitespace-nowrap"
+                >
+                    Source Analysis
+                </button>
+                <button
+                    @click="activeTab = 'languages'"
+                    :class="activeTab === 'languages' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium whitespace-nowrap"
+                >
+                    Languages
+                </button>
+                <button
+                    @click="activeTab = 'interviews'"
+                    :class="activeTab === 'interviews' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium whitespace-nowrap"
+                >
+                    Interview Stats
+                </button>
+            </div>
+        </div>
+
+        <!-- Weekly Summary Tab -->
+        <div x-show="activeTab === 'weekly'" x-cloak>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Controls -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Report Options</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Weeks to Display</label>
+                            <select
+                                x-model="weeksBack"
+                                @change="fetchWeeklySummary()"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                            >
+                                <option value="4">Last 4 weeks</option>
+                                <option value="8">Last 8 weeks</option>
+                                <option value="12">Last 12 weeks</option>
+                            </select>
+                        </div>
+                        <button
+                            @click="fetchWeeklySummary()"
+                            class="w-full px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700"
+                        >
+                            Refresh Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Period Totals</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="text-center p-4 bg-blue-50 rounded-lg">
+                            <p class="text-3xl font-bold text-blue-600" x-text="weeklyTotals.new_candidates">0</p>
+                            <p class="text-sm text-gray-600">New Candidates</p>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <p class="text-3xl font-bold text-green-600" x-text="weeklyTotals.interviews">0</p>
+                            <p class="text-sm text-gray-600">Interviews</p>
+                        </div>
+                        <div class="text-center p-4 bg-red-50 rounded-lg">
+                            <p class="text-3xl font-bold text-red-600" x-text="weeklyTotals.no_shows">0</p>
+                            <p class="text-sm text-gray-600">No-Shows</p>
+                        </div>
+                        <div class="text-center p-4 bg-purple-50 rounded-lg">
+                            <p class="text-3xl font-bold text-purple-600" x-text="weeklyTotals.activated">0</p>
+                            <p class="text-sm text-gray-600">Activated</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weekly Chart -->
+            <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                <h3 class="font-semibold text-gray-800 mb-4">Weekly Trends</h3>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Weekly Table -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <h3 class="font-semibold text-gray-800">Weekly Breakdown</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Week</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">New Candidates</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Interviews</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">No-Shows</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Completion Rate</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Activated</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="week in weeklySummary" :key="week.week_start">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="week.week_label"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="week.new_candidates"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="week.interviews_completed"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-red-600" x-text="week.no_shows"></td>
+                                    <td class="px-4 py-3 text-sm text-right">
+                                        <span
+                                            class="px-2 py-1 rounded-full text-xs"
+                                            :class="week.interview_completion_rate >= 80 ? 'bg-green-100 text-green-700' : week.interview_completion_rate >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                            x-text="week.interview_completion_rate + '%'"
+                                        ></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right text-green-600 font-medium" x-text="week.activated"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pipeline Metrics Tab -->
+        <div x-show="activeTab === 'pipeline'" x-cloak>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Overall Stats -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Pipeline Overview</h3>
+                    <div class="space-y-4">
+                        <div class="text-center p-4 bg-blue-50 rounded-lg">
+                            <p class="text-4xl font-bold text-blue-600" x-text="pipelineMetrics.total_in_pipeline">0</p>
+                            <p class="text-sm text-gray-600">Total in Pipeline</p>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <p class="text-4xl font-bold text-green-600" x-text="pipelineMetrics.overall_conversion_rate + '%'">0%</p>
+                            <p class="text-sm text-gray-600">Overall Conversion Rate</p>
+                            <p class="text-xs text-gray-400 mt-1">New Candidate → Active</p>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <a
+                            href="/api/reports/export/pipeline-report"
+                            class="block w-full px-4 py-2 text-center border border-alfa-blue text-alfa-blue rounded-lg hover:bg-alfa-blue hover:text-white transition-colors"
+                        >
+                            Export to CSV
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Pipeline Funnel -->
+                <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Stage Funnel</h3>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="pipelineFunnelChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Table -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold text-gray-800">Stage Details</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Stage</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Count</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Avg Days in Stage</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Conversion Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="stage in pipelineMetrics.stages" :key="stage.stage">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3">
+                                        <span
+                                            class="px-3 py-1 rounded-full text-sm"
+                                            :class="getStageBadgeColor(stage.stage)"
+                                            x-text="stage.stage"
+                                        ></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right font-medium text-gray-800" x-text="stage.count"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="stage.avg_days_in_stage + ' days'"></td>
+                                    <td class="px-4 py-3 text-sm text-right">
+                                        <span x-show="stage.conversion_from_previous !== null" x-text="stage.conversion_from_previous + '%'"></span>
+                                        <span x-show="stage.conversion_from_previous === null" class="text-gray-400">-</span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recruiter Performance Tab -->
+        <div x-show="activeTab === 'recruiters'" x-cloak>
+            <!-- Filters -->
+            <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                <div class="flex flex-wrap items-center gap-4 mb-4">
+                    <h3 class="font-semibold text-gray-800">Recruiter Performance</h3>
+                    <div class="flex-1"></div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <select
+                            x-model="selectedRecruiter"
+                            @change="fetchRecruiterPerformance()"
+                            class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue min-w-[200px]"
+                        >
+                            <option value="">All Recruiters</option>
+                            <template x-for="name in recruitersList" :key="name">
+                                <option :value="name" x-text="name"></option>
+                            </template>
+                        </select>
+                        <select
+                            x-model="recruiterDays"
+                            @change="fetchRecruiterPerformance()"
+                            class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                        >
+                            <option value="30">Last 30 days</option>
+                            <option value="60">Last 60 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="365">All Time</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="recruiterChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recruiter Summary Cards (when single recruiter selected) -->
+            <div x-show="selectedRecruiter && recruiterPerformance.length === 1" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <template x-if="recruiterPerformance.length === 1">
+                    <template x-for="(value, key) in {
+                        'New': recruiterPerformance[0].new_candidate,
+                        'Screening': recruiterPerformance[0].screening,
+                        'Interviewing': recruiterPerformance[0].interviewing,
+                        'Assessment': recruiterPerformance[0].assessment,
+                        'Onboarding': recruiterPerformance[0].onboarding
+                    }" :key="key">
+                        <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+                            <p class="text-2xl font-bold text-gray-800" x-text="value"></p>
+                            <p class="text-sm text-gray-500" x-text="key"></p>
+                        </div>
+                    </template>
+                </template>
+            </div>
+
+            <!-- Recruiter Table -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <h3 class="font-semibold text-gray-800">
+                        <span x-text="selectedRecruiter ? 'Details for ' + selectedRecruiter : 'All Recruiters'"></span>
+                        <span class="text-gray-400 font-normal" x-text="'(' + recruiterPerformance.length + ' recruiters)'"></span>
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-600 uppercase">Recruiter</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Total</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">New</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Screen</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Interview</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Assess</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Onboard</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase bg-green-50">Active</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Inactive</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Rejected</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase bg-red-50">Unresponsive</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="recruiter in recruiterPerformance" :key="recruiter.name">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-3 text-sm font-medium text-gray-800 whitespace-nowrap" x-text="recruiter.name"></td>
+                                    <td class="px-3 py-3 text-sm text-right font-semibold text-gray-800" x-text="recruiter.total_candidates"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-blue-600" x-text="recruiter.new_candidate"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-yellow-600" x-text="recruiter.screening"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-orange-600" x-text="recruiter.interviewing"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-pink-600" x-text="recruiter.assessment"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-indigo-600" x-text="recruiter.onboarding"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-green-600 font-semibold bg-green-50" x-text="recruiter.active"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-gray-500" x-text="recruiter.inactive"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-gray-500" x-text="recruiter.rejected"></td>
+                                    <td class="px-3 py-3 text-sm text-right text-red-600 bg-red-50" x-text="recruiter.unresponsive"></td>
+                                    <td class="px-3 py-3 text-sm text-right">
+                                        <span
+                                            class="px-2 py-1 rounded-full text-xs"
+                                            :class="recruiter.activation_rate >= 30 ? 'bg-green-100 text-green-700' : recruiter.activation_rate >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                            x-text="recruiter.activation_rate + '%'"
+                                        ></span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                        <!-- Totals Row -->
+                        <tfoot class="bg-gray-100 font-semibold">
+                            <tr>
+                                <td class="px-3 py-3 text-sm text-gray-800">TOTAL</td>
+                                <td class="px-3 py-3 text-sm text-right text-gray-800" x-text="recruiterPerformance.reduce((sum, r) => sum + r.total_candidates, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-blue-600" x-text="recruiterPerformance.reduce((sum, r) => sum + r.new_candidate, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-yellow-600" x-text="recruiterPerformance.reduce((sum, r) => sum + r.screening, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-orange-600" x-text="recruiterPerformance.reduce((sum, r) => sum + r.interviewing, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-pink-600" x-text="recruiterPerformance.reduce((sum, r) => sum + r.assessment, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-indigo-600" x-text="recruiterPerformance.reduce((sum, r) => sum + r.onboarding, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-green-600 bg-green-50" x-text="recruiterPerformance.reduce((sum, r) => sum + r.active, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-gray-500" x-text="recruiterPerformance.reduce((sum, r) => sum + r.inactive, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-gray-500" x-text="recruiterPerformance.reduce((sum, r) => sum + r.rejected, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right text-red-600 bg-red-50" x-text="recruiterPerformance.reduce((sum, r) => sum + r.unresponsive, 0)"></td>
+                                <td class="px-3 py-3 text-sm text-right">-</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Source Analysis Tab -->
+        <div x-show="activeTab === 'sources'" x-cloak>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Candidates by Source</h3>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="sourceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Source Effectiveness</h3>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="sourceEffectivenessChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Source Table -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Source</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Total</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Progressed</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Active</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Progression Rate</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Activation Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="source in sourceAnalysis" :key="source.source">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="source.source"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="source.total_candidates"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="source.progressed_past_screening"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-green-600 font-medium" x-text="source.active"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="source.progression_rate + '%'"></td>
+                                    <td class="px-4 py-3 text-sm text-right">
+                                        <span
+                                            class="px-2 py-1 rounded-full text-xs"
+                                            :class="source.activation_rate >= 20 ? 'bg-green-100 text-green-700' : source.activation_rate >= 10 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                            x-text="source.activation_rate + '%'"
+                                        ></span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Languages Tab -->
+        <div x-show="activeTab === 'languages'" x-cloak>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Language Distribution</h3>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="languageDistChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Tier Breakdown by Language</h3>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="languageTierChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Language Table -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Language</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Total</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Tier 1</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Tier 2</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Tier 3</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">Active</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="lang in languageDistribution" :key="lang.language">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="lang.language"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-600" x-text="lang.total"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-green-600" x-text="lang.tier_1"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-blue-600" x-text="lang.tier_2"></td>
+                                    <td class="px-4 py-3 text-sm text-right text-purple-600" x-text="lang.tier_3"></td>
+                                    <td class="px-4 py-3 text-sm text-right font-medium text-gray-800" x-text="lang.active"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interview Stats Tab -->
+        <div x-show="activeTab === 'interviews'" x-cloak>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                    <p class="text-3xl font-bold text-blue-600" x-text="interviewStats.total_scheduled">0</p>
+                    <p class="text-sm text-gray-600">Total Scheduled</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                    <p class="text-3xl font-bold text-green-600" x-text="interviewStats.completed">0</p>
+                    <p class="text-sm text-gray-600">Completed</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                    <p class="text-3xl font-bold text-red-600" x-text="interviewStats.no_shows">0</p>
+                    <p class="text-sm text-gray-600">No-Shows</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                    <p class="text-3xl font-bold text-purple-600" x-text="interviewStats.completion_rate + '%'">0%</p>
+                    <p class="text-sm text-gray-600">Completion Rate</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold text-gray-800">Interview Outcomes</h3>
+                        <select
+                            x-model="interviewDays"
+                            @change="fetchInterviewStats()"
+                            class="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                        >
+                            <option value="30">Last 30 days</option>
+                            <option value="60">Last 60 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                    </div>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="outcomeChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="font-semibold text-gray-800 mb-4">Interviews by Type</h3>
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="typeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="mt-6 bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-semibold text-gray-800 mb-4">Export Data</h3>
+            <div class="flex flex-wrap gap-3">
+                <a
+                    href="/api/reports/export/candidates"
+                    class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    All Candidates (CSV)
+                </a>
+                <a
+                    href="/api/reports/export/candidates?stage=Active"
+                    class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Active Interpreters (CSV)
+                </a>
+                <a
+                    href="/api/reports/export/pipeline-report"
+                    class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Pipeline Report (CSV)
+                </a>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+function reportsApp() {
+    return {
+        loading: true,
+        activeTab: 'weekly',
+        charts: {},
+
+        // Weekly summary
+        weeksBack: 4,
+        weeklySummary: [],
+        weeklyTotals: { new_candidates: 0, interviews: 0, no_shows: 0, activated: 0 },
+
+        // Pipeline
+        pipelineMetrics: { stages: [], total_in_pipeline: 0, overall_conversion_rate: 0 },
+
+        // Recruiters
+        recruiterDays: 30,
+        selectedRecruiter: '',
+        recruitersList: [],
+        recruiterPerformance: [],
+
+        // Sources
+        sourceAnalysis: [],
+
+        // Languages
+        languageDistribution: [],
+
+        // Interviews
+        interviewDays: 30,
+        interviewStats: { total_scheduled: 0, completed: 0, no_shows: 0, completion_rate: 0, outcomes: {}, by_type: {} },
+
+        async init() {
+            await Promise.all([
+                this.fetchWeeklySummary(),
+                this.fetchPipelineMetrics(),
+                this.fetchRecruitersList(),
+                this.fetchRecruiterPerformance(),
+                this.fetchSourceAnalysis(),
+                this.fetchLanguageDistribution(),
+                this.fetchInterviewStats()
+            ]);
+            this.loading = false;
+        },
+
+        async fetchRecruitersList() {
+            try {
+                const response = await fetch('/api/reports/recruiters');
+                const data = await response.json();
+                this.recruitersList = data.recruiters;
+            } catch (error) {
+                console.error('Failed to fetch recruiters list:', error);
+            }
+        },
+
+        async fetchWeeklySummary() {
+            try {
+                const response = await fetch(`/api/reports/weekly-summary?weeks_back=${this.weeksBack}`);
+                const data = await response.json();
+                this.weeklySummary = data.weeks;
+
+                // Calculate totals
+                this.weeklyTotals = {
+                    new_candidates: data.weeks.reduce((sum, w) => sum + w.new_candidates, 0),
+                    interviews: data.weeks.reduce((sum, w) => sum + w.interviews_completed, 0),
+                    no_shows: data.weeks.reduce((sum, w) => sum + w.no_shows, 0),
+                    activated: data.weeks.reduce((sum, w) => sum + w.activated, 0)
+                };
+
+                this.renderWeeklyChart();
+            } catch (error) {
+                console.error('Failed to fetch weekly summary:', error);
+            }
+        },
+
+        async fetchPipelineMetrics() {
+            try {
+                const response = await fetch('/api/reports/pipeline-metrics');
+                this.pipelineMetrics = await response.json();
+                this.renderPipelineChart();
+            } catch (error) {
+                console.error('Failed to fetch pipeline metrics:', error);
+            }
+        },
+
+        async fetchRecruiterPerformance() {
+            try {
+                let url = `/api/reports/recruiter-performance?days=${this.recruiterDays}`;
+                if (this.selectedRecruiter) {
+                    url += `&recruiter=${encodeURIComponent(this.selectedRecruiter)}`;
+                }
+                const response = await fetch(url);
+                const data = await response.json();
+                this.recruiterPerformance = data.recruiters;
+                this.renderRecruiterChart();
+            } catch (error) {
+                console.error('Failed to fetch recruiter performance:', error);
+            }
+        },
+
+        async fetchSourceAnalysis() {
+            try {
+                const response = await fetch('/api/reports/source-analysis');
+                const data = await response.json();
+                this.sourceAnalysis = data.sources;
+                this.renderSourceCharts();
+            } catch (error) {
+                console.error('Failed to fetch source analysis:', error);
+            }
+        },
+
+        async fetchLanguageDistribution() {
+            try {
+                const response = await fetch('/api/reports/language-distribution');
+                const data = await response.json();
+                this.languageDistribution = data.languages;
+                this.renderLanguageCharts();
+            } catch (error) {
+                console.error('Failed to fetch language distribution:', error);
+            }
+        },
+
+        async fetchInterviewStats() {
+            try {
+                const response = await fetch(`/api/reports/interview-stats?days=${this.interviewDays}`);
+                this.interviewStats = await response.json();
+                this.renderInterviewCharts();
+            } catch (error) {
+                console.error('Failed to fetch interview stats:', error);
+            }
+        },
+
+        renderWeeklyChart() {
+            const ctx = document.getElementById('weeklyChart');
+            if (!ctx) return;
+
+            if (this.charts.weekly) this.charts.weekly.destroy();
+
+            this.charts.weekly = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: this.weeklySummary.map(w => w.week_label),
+                    datasets: [
+                        {
+                            label: 'New Candidates',
+                            data: this.weeklySummary.map(w => w.new_candidates),
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Interviews',
+                            data: this.weeklySummary.map(w => w.interviews_completed),
+                            borderColor: 'rgba(34, 197, 94, 1)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Activated',
+                            data: this.weeklySummary.map(w => w.activated),
+                            borderColor: 'rgba(168, 85, 247, 1)',
+                            backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        },
+
+        renderPipelineChart() {
+            const ctx = document.getElementById('pipelineFunnelChart');
+            if (!ctx) return;
+
+            if (this.charts.pipeline) this.charts.pipeline.destroy();
+
+            const colors = [
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(234, 179, 8, 0.8)',
+                'rgba(249, 115, 22, 0.8)',
+                'rgba(168, 85, 247, 0.8)',
+                'rgba(236, 72, 153, 0.8)',
+                'rgba(99, 102, 241, 0.8)',
+                'rgba(34, 197, 94, 0.8)'
+            ];
+
+            this.charts.pipeline = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: this.pipelineMetrics.stages.map(s => s.stage),
+                    datasets: [{
+                        label: 'Candidates',
+                        data: this.pipelineMetrics.stages.map(s => s.count),
+                        backgroundColor: colors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        },
+
+        renderRecruiterChart() {
+            const ctx = document.getElementById('recruiterChart');
+            if (!ctx) return;
+
+            if (this.charts.recruiter) this.charts.recruiter.destroy();
+
+            const top10 = this.recruiterPerformance.slice(0, 10);
+
+            this.charts.recruiter = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top10.map(r => r.name.split(' ')[0]),
+                    datasets: [
+                        {
+                            label: 'New',
+                            data: top10.map(r => r.new_candidate || 0),
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                        },
+                        {
+                            label: 'Screening',
+                            data: top10.map(r => r.screening || 0),
+                            backgroundColor: 'rgba(234, 179, 8, 0.8)'
+                        },
+                        {
+                            label: 'Interview',
+                            data: top10.map(r => r.interviewing || 0),
+                            backgroundColor: 'rgba(249, 115, 22, 0.8)'
+                        },
+                        {
+                            label: 'Assessment',
+                            data: top10.map(r => r.assessment || 0),
+                            backgroundColor: 'rgba(236, 72, 153, 0.8)'
+                        },
+                        {
+                            label: 'Onboarding',
+                            data: top10.map(r => r.onboarding || 0),
+                            backgroundColor: 'rgba(99, 102, 241, 0.8)'
+                        },
+                        {
+                            label: 'Active',
+                            data: top10.map(r => r.active || 0),
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true }
+                    }
+                }
+            });
+        },
+
+        renderSourceCharts() {
+            // Source distribution chart
+            const ctx1 = document.getElementById('sourceChart');
+            if (ctx1) {
+                if (this.charts.source) this.charts.source.destroy();
+
+                this.charts.source = new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: this.sourceAnalysis.slice(0, 8).map(s => s.source),
+                        datasets: [{
+                            data: this.sourceAnalysis.slice(0, 8).map(s => s.total_candidates),
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(34, 197, 94, 0.8)',
+                                'rgba(234, 179, 8, 0.8)',
+                                'rgba(249, 115, 22, 0.8)',
+                                'rgba(168, 85, 247, 0.8)',
+                                'rgba(236, 72, 153, 0.8)',
+                                'rgba(99, 102, 241, 0.8)',
+                                'rgba(107, 114, 128, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right' } }
+                    }
+                });
+            }
+
+            // Source effectiveness chart
+            const ctx2 = document.getElementById('sourceEffectivenessChart');
+            if (ctx2) {
+                if (this.charts.sourceEff) this.charts.sourceEff.destroy();
+
+                const top8 = this.sourceAnalysis.slice(0, 8);
+
+                this.charts.sourceEff = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: top8.map(s => s.source),
+                        datasets: [{
+                            label: 'Activation Rate (%)',
+                            data: top8.map(s => s.activation_rate),
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+        },
+
+        renderLanguageCharts() {
+            // Language distribution
+            const ctx1 = document.getElementById('languageDistChart');
+            if (ctx1) {
+                if (this.charts.langDist) this.charts.langDist.destroy();
+
+                this.charts.langDist = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: this.languageDistribution.slice(0, 10).map(l => l.language),
+                        datasets: [{
+                            label: 'Total',
+                            data: this.languageDistribution.slice(0, 10).map(l => l.total),
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+
+            // Tier breakdown
+            const ctx2 = document.getElementById('languageTierChart');
+            if (ctx2) {
+                if (this.charts.langTier) this.charts.langTier.destroy();
+
+                const top8 = this.languageDistribution.slice(0, 8);
+
+                this.charts.langTier = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: top8.map(l => l.language),
+                        datasets: [
+                            {
+                                label: 'Tier 1',
+                                data: top8.map(l => l.tier_1),
+                                backgroundColor: 'rgba(34, 197, 94, 0.8)'
+                            },
+                            {
+                                label: 'Tier 2',
+                                data: top8.map(l => l.tier_2),
+                                backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                            },
+                            {
+                                label: 'Tier 3',
+                                data: top8.map(l => l.tier_3),
+                                backgroundColor: 'rgba(168, 85, 247, 0.8)'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top' } },
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true }
+                        }
+                    }
+                });
+            }
+        },
+
+        renderInterviewCharts() {
+            // Outcomes
+            const ctx1 = document.getElementById('outcomeChart');
+            if (ctx1) {
+                if (this.charts.outcome) this.charts.outcome.destroy();
+
+                const outcomes = this.interviewStats.outcomes || {};
+                const labels = Object.keys(outcomes);
+                const data = Object.values(outcomes);
+
+                this.charts.outcome = new Chart(ctx1, {
+                    type: 'pie',
+                    data: {
+                        labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                        datasets: [{
+                            data: data,
+                            backgroundColor: [
+                                'rgba(34, 197, 94, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(234, 179, 8, 0.8)',
+                                'rgba(107, 114, 128, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+            }
+
+            // By type
+            const ctx2 = document.getElementById('typeChart');
+            if (ctx2) {
+                if (this.charts.type) this.charts.type.destroy();
+
+                const byType = this.interviewStats.by_type || {};
+                const labels = Object.keys(byType);
+                const data = Object.values(byType);
+
+                this.charts.type = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Interviews',
+                            data: data,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+        },
+
+        getStageBadgeColor(stage) {
+            const colors = {
+                'New Candidate': 'bg-blue-100 text-blue-700',
+                'Screening': 'bg-yellow-100 text-yellow-700',
+                'Interview Scheduled': 'bg-orange-100 text-orange-700',
+                'Interview Completed': 'bg-purple-100 text-purple-700',
+                'Assessment': 'bg-pink-100 text-pink-700',
+                'Onboarding': 'bg-indigo-100 text-indigo-700',
+                'Active': 'bg-green-100 text-green-700'
+            };
+            return colors[stage] || 'bg-gray-100 text-gray-700';
+        }
+    };
+}
+</script>
+{% endblock %}

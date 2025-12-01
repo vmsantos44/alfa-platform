@@ -1,0 +1,715 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Alfa Operations Platform{% endblock %}
+
+{% block nav_dashboard %}bg-gray-700{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}What needs your attention today{% endblock %}
+
+{% block content %}
+<div x-data="dashboardApp()" x-init="init()">
+
+    <!-- Loading State -->
+    <div x-show="loading" class="flex items-center justify-center h-64">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div x-show="!loading" x-cloak>
+
+        <!-- Filter Bar -->
+        <div class="bg-white rounded-lg shadow-sm p-3 mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <!-- Owner Filter -->
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 whitespace-nowrap">Recruitment Owner:</label>
+                    <select
+                        x-model="selectedOwner"
+                        @change="applyOwnerFilter()"
+                        class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-alfa-blue focus:border-alfa-blue"
+                    >
+                        <option value="">All Team Members</option>
+                        <template x-for="owner in owners" :key="owner">
+                            <option :value="owner" x-text="owner"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- Quick Toggle: My Candidates -->
+                <button
+                    @click="toggleMyView()"
+                    class="text-sm px-3 py-1.5 rounded-lg border transition-colors"
+                    :class="isMyView ? 'bg-alfa-blue text-white border-alfa-blue' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'"
+                >
+                    <span x-text="isMyView ? 'Showing: Mine' : 'Show: My Candidates'"></span>
+                </button>
+            </div>
+
+            <!-- Last Sync Info -->
+            <div class="flex items-center gap-2 text-xs text-gray-500">
+                <span x-show="lastRefresh" x-text="'Last updated: ' + formatRelativeTime(lastRefresh)"></span>
+                <button @click="refreshAll()" class="text-alfa-blue hover:underline">Refresh</button>
+            </div>
+        </div>
+
+        <!-- Stats Row - Compact 4-column grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <!-- Needs Action -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-red-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">Needs Action</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.needs_action_count">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheduled Today -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">Today's Interviews</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.scheduled_today_count">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- In Pipeline -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-amber-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">In Pipeline</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.in_pipeline_count">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Interpreters -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">Active</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.active_interpreters_count">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Two Column Layout: Alerts + Tasks side by side -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+            <!-- System Alerts (Compact) -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        <h2 class="text-sm font-semibold text-gray-800">SYSTEM ALERTS</h2>
+                        <span x-show="filteredAlertCounts.total > 0" class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" x-text="filteredAlertCounts.total"></span>
+                    </div>
+                </div>
+
+                <div class="p-3">
+                    <!-- Compact Alert Category Pills -->
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <button
+                            @click="filterAlertCategory('upcoming_interviews')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'upcoming_interviews' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'"
+                        >
+                            <span>Interviews</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.today_interviews || 0"></span>
+                        </button>
+                        <button
+                            @click="filterAlertCategory('no_shows')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'no_shows' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'"
+                        >
+                            <span>No-Shows</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.no_shows || 0"></span>
+                        </button>
+                        <button
+                            @click="filterAlertCategory('stuck_candidates')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'stuck_candidates' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'"
+                        >
+                            <span>Stuck</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.stuck_candidates || 0"></span>
+                        </button>
+                        <button
+                            @click="filterAlertCategory('overdue_assessments')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'overdue_assessments' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'"
+                        >
+                            <span>Assessments</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.overdue_assessments || 0"></span>
+                        </button>
+                        <button
+                            x-show="alertFilter"
+                            @click="alertFilter = null"
+                            class="text-xs px-2 py-1 text-gray-500 hover:text-gray-700"
+                        >Clear</button>
+                    </div>
+
+                    <!-- Alert List (Compact) -->
+                    <div class="max-h-[250px] overflow-y-auto">
+                        <div x-show="systemAlertsLoading" class="text-center py-4 text-gray-400">
+                            <svg class="animate-spin h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!systemAlertsLoading && filteredAlerts.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                            No alerts
+                        </div>
+                        <ul class="space-y-1" x-show="!systemAlertsLoading && filteredAlerts.length > 0">
+                            <template x-for="alert in filteredAlerts.slice(0, 8)" :key="alert.id">
+                                <li class="flex items-center justify-between p-2 rounded border text-sm"
+                                    :class="{
+                                        'bg-red-50 border-red-200': alert.priority === 'high',
+                                        'bg-amber-50 border-amber-200': alert.priority === 'medium',
+                                        'bg-gray-50 border-gray-200': alert.priority === 'low'
+                                    }">
+                                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                                        <div class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                             :class="{
+                                                 'bg-red-500': alert.priority === 'high',
+                                                 'bg-amber-500': alert.priority === 'medium',
+                                                 'bg-gray-400': alert.priority === 'low'
+                                             }"></div>
+                                        <span class="truncate" x-text="alert.title"></span>
+                                    </div>
+                                    <a x-show="alert.action_url" :href="alert.action_url"
+                                       class="text-xs text-alfa-blue hover:underline ml-2 flex-shrink-0">View</a>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zoho Tasks (Compact) -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        <h2 class="text-sm font-semibold text-gray-800">TASKS</h2>
+                        <span x-show="filteredActionSummary.total > 0" class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full" x-text="filteredActionSummary.total"></span>
+                        <span x-show="filteredActionSummary.overdue > 0" class="text-xs bg-red-600 text-white px-1.5 py-0.5 rounded-full" x-text="filteredActionSummary.overdue + ' overdue'"></span>
+                    </div>
+                </div>
+
+                <div class="p-3">
+                    <div class="max-h-[250px] overflow-y-auto">
+                        <div x-show="actionItemsLoading" class="text-center py-4 text-gray-400">
+                            <svg class="animate-spin h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!actionItemsLoading && filteredActionItems.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                            No pending tasks
+                        </div>
+                        <ul class="space-y-1" x-show="!actionItemsLoading && filteredActionItems.length > 0">
+                            <template x-for="task in filteredActionItems.slice(0, 8)" :key="task.id">
+                                <li class="flex items-center justify-between p-2 rounded border text-sm"
+                                    :class="{
+                                        'bg-red-50 border-red-200': task.is_overdue,
+                                        'bg-amber-50 border-amber-200': task.is_due_today && !task.is_overdue,
+                                        'bg-gray-50 border-gray-100': !task.is_overdue && !task.is_due_today
+                                    }">
+                                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                                        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              :class="{
+                                                  'bg-red-500': task.is_overdue || task.priority === 'high',
+                                                  'bg-amber-500': task.is_due_today || task.priority === 'medium',
+                                                  'bg-blue-500': task.priority === 'low'
+                                              }"></span>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="truncate font-medium" x-text="task.title"></p>
+                                            <p class="text-xs text-gray-500 truncate" x-show="task.candidate_name" x-text="task.candidate_name"></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1 ml-2 flex-shrink-0">
+                                        <span class="text-xs text-gray-500" x-text="formatTaskDate(task.due_date)"></span>
+                                        <button @click="completeTask(task.id)" class="p-1 text-gray-400 hover:text-green-600">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="grid grid-cols-1 gap-4 mb-4">
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-gray-800">RECENT ACTIVITY</h2>
+                </div>
+                <div class="p-3 max-h-[200px] overflow-y-auto">
+                    <div x-show="filteredRecentActivity.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                        No recent activity
+                    </div>
+                    <ul class="space-y-2" x-show="filteredRecentActivity.length > 0">
+                        <template x-for="item in filteredRecentActivity.slice(0, 5)" :key="item.id">
+                            <li class="flex items-center gap-2 text-sm">
+                                <div class="w-7 h-7 rounded-full bg-alfa-blue/10 flex items-center justify-center text-alfa-blue text-xs font-semibold flex-shrink-0" x-text="item.name.charAt(0)"></div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="truncate font-medium text-gray-800" x-text="item.name"></p>
+                                    <span class="text-xs px-1.5 py-0.5 rounded" :class="getStageBadgeColor(item.stage)" x-text="item.stage"></span>
+                                </div>
+                                <span class="text-xs text-gray-400 flex-shrink-0" x-text="formatRelativeTime(item.activity_date)"></span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pipeline Overview Bar -->
+        <div class="bg-white rounded-lg shadow-sm mb-4">
+            <div class="p-3 border-b flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-gray-800">PIPELINE BREAKDOWN</h2>
+                <span class="text-xs text-gray-500" x-text="'Total: ' + filteredStats.total_candidates"></span>
+            </div>
+            <div class="p-3">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                    <template x-for="stage in filteredPipeline" :key="stage.stage">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold" :class="getPipelineTextColor(stage.stage)" x-text="stage.count"></div>
+                            <div class="text-xs text-gray-500 truncate" x-text="stage.stage"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="flex flex-wrap gap-2">
+            <a href="/candidates" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white rounded-lg shadow-sm hover:shadow-md border">
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span>Search</span>
+            </a>
+            <a href="/scheduling" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white rounded-lg shadow-sm hover:shadow-md border">
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <span>Schedule</span>
+            </a>
+            <a href="/chat" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-alfa-blue text-white rounded-lg shadow-sm hover:bg-blue-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <span>Chat</span>
+            </a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function dashboardApp() {
+    return {
+        loading: true,
+        lastRefresh: null,
+
+        // Owner filter
+        selectedOwner: '',
+        owners: [],
+        isMyView: false,
+        currentUser: null, // Will be set from localStorage or detected
+
+        // Raw data (unfiltered) - stored for client-side filtering
+        rawCandidates: [],
+        rawRecentActivity: [],
+        rawSystemAlerts: [],
+        rawActionItems: [],
+
+        // Filtered data (computed based on selectedOwner)
+        filteredStats: {
+            needs_action_count: 0,
+            scheduled_today_count: 0,
+            active_interpreters_count: 0,
+            in_pipeline_count: 0,
+            total_candidates: 0
+        },
+        filteredPipeline: [],
+        filteredRecentActivity: [],
+        filteredAlertCounts: { total: 0, no_shows: 0, today_interviews: 0, stuck_candidates: 0, pending_documents: 0, overdue_assessments: 0 },
+        filteredActionSummary: { total: 0, overdue: 0, due_today: 0 },
+
+        // UI state
+        systemAlertsLoading: false,
+        actionItemsLoading: false,
+        alertFilter: null,
+
+        async init() {
+            // Load saved filter from localStorage
+            const savedOwner = localStorage.getItem('dashboard_owner_filter');
+            if (savedOwner) {
+                this.selectedOwner = savedOwner;
+                this.isMyView = true;
+            }
+
+            // Fetch all data
+            await Promise.all([
+                this.fetchCandidates(),
+                this.fetchSystemAlerts(),
+                this.fetchActionItems(),
+                this.fetchRecentActivity()
+            ]);
+
+            // Apply initial filter
+            this.applyOwnerFilter();
+
+            this.lastRefresh = new Date().toISOString();
+            this.loading = false;
+        },
+
+        async fetchCandidates() {
+            try {
+                // Fetch candidates and filter options in parallel
+                const [candidatesRes, filterRes] = await Promise.all([
+                    fetch('/api/candidates/?limit=5000'),
+                    fetch('/api/candidates/filter-options')
+                ]);
+
+                const data = await candidatesRes.json();
+                this.rawCandidates = data.candidates || data || [];
+
+                // Get recruitment owners from filter-options (more reliable)
+                const filterData = await filterRes.json();
+                this.owners = filterData.recruitment_owners || [];
+
+            } catch (error) {
+                console.error('Failed to fetch candidates:', error);
+                this.rawCandidates = [];
+                this.owners = [];
+            }
+        },
+
+        async fetchSystemAlerts() {
+            this.systemAlertsLoading = true;
+            try {
+                const response = await fetch('/api/alerts/');
+                const alertsData = await response.json();
+
+                // Flatten all alerts
+                this.rawSystemAlerts = [];
+                if (alertsData.alerts) {
+                    for (const [category, items] of Object.entries(alertsData.alerts)) {
+                        for (const item of items) {
+                            this.rawSystemAlerts.push({ ...item, category });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch system alerts:', error);
+                this.rawSystemAlerts = [];
+            } finally {
+                this.systemAlertsLoading = false;
+            }
+        },
+
+        async fetchActionItems() {
+            this.actionItemsLoading = true;
+            try {
+                const response = await fetch('/api/tasks/action-required?limit=100');
+                const data = await response.json();
+                this.rawActionItems = data.items || [];
+            } catch (error) {
+                console.error('Failed to fetch action items:', error);
+                this.rawActionItems = [];
+            } finally {
+                this.actionItemsLoading = false;
+            }
+        },
+
+        async fetchRecentActivity() {
+            try {
+                const response = await fetch('/api/dashboard/analytics/recent-activity?limit=50');
+                const data = await response.json();
+                this.rawRecentActivity = data.data || [];
+            } catch (error) {
+                console.error('Failed to fetch recent activity:', error);
+                this.rawRecentActivity = [];
+            }
+        },
+
+        applyOwnerFilter() {
+            // Save to localStorage
+            if (this.selectedOwner) {
+                localStorage.setItem('dashboard_owner_filter', this.selectedOwner);
+            } else {
+                localStorage.removeItem('dashboard_owner_filter');
+            }
+
+            // Ensure rawCandidates is an array
+            const candidates = Array.isArray(this.rawCandidates) ? this.rawCandidates : [];
+
+            // Filter candidates by recruitment_owner
+            const filtered = this.selectedOwner
+                ? candidates.filter(c => c.recruitment_owner === this.selectedOwner)
+                : candidates;
+
+            // Calculate filtered stats
+            const activeStages = ['New Candidate', 'Screening', 'Interview Scheduled', 'Interview Completed', 'Assessment', 'Onboarding'];
+            const inPipeline = filtered.filter(c => activeStages.includes(c.stage)).length;
+            const active = filtered.filter(c => c.stage === 'Active').length;
+
+            this.filteredStats = {
+                needs_action_count: this.getFilteredAlertCount(),
+                scheduled_today_count: this.getFilteredTodayInterviewCount(),
+                in_pipeline_count: inPipeline,
+                active_interpreters_count: active,
+                total_candidates: filtered.length
+            };
+
+            // Calculate filtered pipeline
+            const pipelineMap = {};
+            filtered.forEach(c => {
+                pipelineMap[c.stage] = (pipelineMap[c.stage] || 0) + 1;
+            });
+            this.filteredPipeline = Object.entries(pipelineMap)
+                .map(([stage, count]) => ({ stage, count }))
+                .sort((a, b) => {
+                    const order = ['New Candidate', 'Screening', 'Interview Scheduled', 'Interview Completed', 'Assessment', 'Onboarding', 'Active', 'Inactive', 'Rejected'];
+                    return order.indexOf(a.stage) - order.indexOf(b.stage);
+                });
+
+            // Filter recent activity
+            const recentActivity = Array.isArray(this.rawRecentActivity) ? this.rawRecentActivity : [];
+            this.filteredRecentActivity = this.selectedOwner
+                ? recentActivity.filter(a => a.recruitment_owner === this.selectedOwner)
+                : recentActivity;
+
+            // Update alert counts (filtered by owner where applicable)
+            this.updateFilteredAlertCounts();
+
+            // Update action items summary
+            this.updateFilteredActionSummary();
+        },
+
+        getFilteredAlertCount() {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            return alerts.filter(a => {
+                if (!this.selectedOwner) return true;
+                return !a.recruitment_owner || a.recruitment_owner === this.selectedOwner;
+            }).length;
+        },
+
+        getFilteredTodayInterviewCount() {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            return alerts.filter(a => {
+                if (a.category !== 'upcoming_interviews') return false;
+                if (!this.selectedOwner) return true;
+                return !a.recruitment_owner || a.recruitment_owner === this.selectedOwner;
+            }).length;
+        },
+
+        updateFilteredAlertCounts() {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            const filtered = this.selectedOwner
+                ? alerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
+                : alerts;
+
+            this.filteredAlertCounts = {
+                total: filtered.length,
+                no_shows: filtered.filter(a => a.category === 'no_shows').length,
+                today_interviews: filtered.filter(a => a.category === 'upcoming_interviews').length,
+                stuck_candidates: filtered.filter(a => a.category === 'stuck_candidates').length,
+                overdue_assessments: filtered.filter(a => a.category === 'overdue_assessments').length,
+                pending_documents: filtered.filter(a => a.category === 'pending_documents').length
+            };
+        },
+
+        updateFilteredActionSummary() {
+            const items = Array.isArray(this.rawActionItems) ? this.rawActionItems : [];
+            const filtered = this.selectedOwner
+                ? items.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
+                : items;
+
+            this.filteredActionSummary = {
+                total: filtered.length,
+                overdue: filtered.filter(t => t.is_overdue).length,
+                due_today: filtered.filter(t => t.is_due_today).length
+            };
+        },
+
+        get filteredAlerts() {
+            const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
+            let filtered = this.selectedOwner
+                ? alerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
+                : alerts;
+
+            if (this.alertFilter) {
+                filtered = filtered.filter(a => a.category === this.alertFilter);
+            }
+
+            return filtered.sort((a, b) => {
+                const priority = { high: 0, medium: 1, low: 2 };
+                return (priority[a.priority] || 1) - (priority[b.priority] || 1);
+            });
+        },
+
+        get filteredActionItems() {
+            const items = Array.isArray(this.rawActionItems) ? this.rawActionItems : [];
+            let filtered = this.selectedOwner
+                ? items.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
+                : items;
+
+            return filtered.sort((a, b) => {
+                if (a.is_overdue && !b.is_overdue) return -1;
+                if (!a.is_overdue && b.is_overdue) return 1;
+                return 0;
+            });
+        },
+
+        toggleMyView() {
+            if (this.isMyView) {
+                // Switch to All
+                this.selectedOwner = '';
+                this.isMyView = false;
+            } else {
+                // Switch to My view - use first owner or prompt user
+                if (this.owners.length > 0) {
+                    // Try to find current user from localStorage
+                    const savedUser = localStorage.getItem('dashboard_current_user');
+                    if (savedUser && this.owners.includes(savedUser)) {
+                        this.selectedOwner = savedUser;
+                    } else {
+                        this.selectedOwner = this.owners[0];
+                        localStorage.setItem('dashboard_current_user', this.selectedOwner);
+                    }
+                    this.isMyView = true;
+                }
+            }
+            this.applyOwnerFilter();
+        },
+
+        filterAlertCategory(category) {
+            this.alertFilter = this.alertFilter === category ? null : category;
+        },
+
+        async refreshAll() {
+            this.loading = true;
+            await Promise.all([
+                this.fetchCandidates(),
+                this.fetchSystemAlerts(),
+                this.fetchActionItems(),
+                this.fetchRecentActivity()
+            ]);
+            this.applyOwnerFilter();
+            this.lastRefresh = new Date().toISOString();
+            this.loading = false;
+        },
+
+        async completeTask(taskId) {
+            try {
+                const response = await fetch(`/api/tasks/${taskId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (response.ok) {
+                    this.rawActionItems = this.rawActionItems.filter(t => t.id !== taskId);
+                    this.updateFilteredActionSummary();
+                }
+            } catch (error) {
+                console.error('Failed to complete task:', error);
+            }
+        },
+
+
+        formatTaskDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            if (date.toDateString() === today.toDateString()) return 'Today';
+            if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        },
+
+        formatRelativeTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            if (diffMins < 1) return 'just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return date.toLocaleDateString();
+        },
+
+        getPipelineTextColor(stage) {
+            const colors = {
+                'New Candidate': 'text-blue-600',
+                'Screening': 'text-yellow-600',
+                'Interview Scheduled': 'text-orange-600',
+                'Interview Completed': 'text-purple-600',
+                'Assessment': 'text-pink-600',
+                'Onboarding': 'text-indigo-600',
+                'Active': 'text-green-600',
+                'Inactive': 'text-gray-600',
+                'Rejected': 'text-red-600'
+            };
+            return colors[stage] || 'text-gray-600';
+        },
+
+        getStageBadgeColor(stage) {
+            const colors = {
+                'New Candidate': 'bg-blue-100 text-blue-700',
+                'Screening': 'bg-yellow-100 text-yellow-700',
+                'Interview Scheduled': 'bg-orange-100 text-orange-700',
+                'Interview Completed': 'bg-purple-100 text-purple-700',
+                'Assessment': 'bg-pink-100 text-pink-700',
+                'Onboarding': 'bg-indigo-100 text-indigo-700',
+                'Active': 'bg-green-100 text-green-700',
+                'Inactive': 'bg-gray-100 text-gray-700',
+                'Rejected': 'bg-red-100 text-red-700'
+            };
+            return colors[stage] || 'bg-gray-100 text-gray-700';
+        }
+    };
+}
+</script>
+{% endblock %}

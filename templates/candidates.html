@@ -1,0 +1,1137 @@
+{% extends "base.html" %}
+
+{% block title %}Candidates - Alfa Operations Platform{% endblock %}
+
+{% block nav_candidates %}bg-gray-700{% endblock %}
+
+{% block page_title %}Candidate Pipeline{% endblock %}
+{% block page_subtitle %}Track candidates through recruitment stages{% endblock %}
+
+{% block content %}
+<div x-data="candidatesApp()" x-init="init()">
+
+    <!-- Main Filters Bar -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+        <div class="flex flex-wrap items-center gap-4">
+            <!-- Search -->
+            <div class="flex-1 min-w-[200px]">
+                <div class="relative">
+                    <input
+                        type="text"
+                        x-model="filters.search"
+                        @input.debounce.300ms="applyFilters()"
+                        placeholder="Search by name or email..."
+                        class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                    >
+                    <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Advanced Filters Toggle -->
+            <button
+                @click="showAdvancedFilters = !showAdvancedFilters"
+                class="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                :class="hasActiveFilters ? 'border-alfa-blue text-alfa-blue' : 'text-gray-600'"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                <span>Filters</span>
+                <span x-show="activeFilterCount > 0" class="bg-alfa-blue text-white text-xs px-2 py-0.5 rounded-full" x-text="activeFilterCount"></span>
+            </button>
+
+            <!-- Clear Filters -->
+            <button
+                x-show="hasActiveFilters"
+                @click="clearFilters()"
+                class="text-sm text-red-600 hover:text-red-800"
+            >
+                Clear all
+            </button>
+
+            <!-- Save Preset Button -->
+            <button
+                x-show="hasActiveFilters"
+                @click="showSavePresetModal = true"
+                class="flex items-center gap-1 text-sm text-gray-600 hover:text-alfa-blue"
+                title="Save current filters as preset"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                </svg>
+                Save
+            </button>
+
+            <!-- Presets Dropdown -->
+            <div class="relative" x-data="{ open: false }">
+                <button
+                    @click="open = !open"
+                    class="flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-gray-50 text-sm text-gray-600"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                    Presets
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open" @click.away="open = false" class="absolute right-0 z-20 mt-1 w-64 bg-white border rounded-lg shadow-lg">
+                    <div class="p-2 border-b">
+                        <span class="text-xs font-medium text-gray-500 uppercase">Saved Presets</span>
+                    </div>
+                    <div class="max-h-60 overflow-auto">
+                        <template x-if="savedPresets.length === 0">
+                            <div class="px-3 py-4 text-sm text-gray-400 text-center">No saved presets</div>
+                        </template>
+                        <template x-for="preset in savedPresets" :key="preset.name">
+                            <div class="flex items-center justify-between px-3 py-2 hover:bg-gray-50 group">
+                                <button
+                                    @click="applyPreset(preset); open = false"
+                                    class="flex-1 text-left text-sm text-gray-700"
+                                    x-text="preset.name"
+                                ></button>
+                                <button
+                                    @click.stop="deletePreset(preset.name)"
+                                    class="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                                    title="Delete preset"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Toggle -->
+            <div class="flex border rounded-lg overflow-hidden">
+                <button
+                    @click="viewMode = 'pipeline'"
+                    :class="viewMode === 'pipeline' ? 'bg-alfa-blue text-white' : 'bg-white text-gray-600'"
+                    class="px-4 py-2 text-sm font-medium transition-colors"
+                >
+                    Pipeline
+                </button>
+                <button
+                    @click="viewMode = 'list'"
+                    :class="viewMode === 'list' ? 'bg-alfa-blue text-white' : 'bg-white text-gray-600'"
+                    class="px-4 py-2 text-sm font-medium transition-colors"
+                >
+                    List
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filters Panel -->
+    <div x-show="showAdvancedFilters" x-cloak class="bg-white rounded-xl shadow-sm p-4 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+            <!-- Stage Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+                <div class="relative" x-data="{ open: false }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.stages.length ? filters.stages.length + ' selected' : 'All Stages'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                        <template x-for="stage in allStages" :key="stage">
+                            <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    :value="stage"
+                                    x-model="filters.stages"
+                                    @change="applyFilters()"
+                                    class="w-4 h-4 text-alfa-blue rounded"
+                                >
+                                <span class="ml-2 text-sm" x-text="stage"></span>
+                                <span class="ml-auto text-xs text-gray-400" x-text="'(' + (filterOptions.stages?.[stage] || 0) + ')'"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Days in Stage Range -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Days in Stage</label>
+                <div class="flex gap-2">
+                    <input
+                        type="number"
+                        x-model="filters.daysMin"
+                        @change="applyFilters()"
+                        placeholder="Min"
+                        min="0"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                    <input
+                        type="number"
+                        x-model="filters.daysMax"
+                        @change="applyFilters()"
+                        placeholder="Max"
+                        min="0"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                </div>
+            </div>
+
+            <!-- Last Activity Date Range -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Last Activity</label>
+                <div class="flex gap-2">
+                    <input
+                        type="date"
+                        x-model="filters.dateFrom"
+                        @change="applyFilters()"
+                        placeholder="From"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                    <input
+                        type="date"
+                        x-model="filters.dateTo"
+                        @change="applyFilters()"
+                        placeholder="To"
+                        class="w-1/2 px-3 py-2 border rounded-lg text-sm"
+                    >
+                </div>
+            </div>
+
+            <!-- Language Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <div class="relative" x-data="{ open: false, search: '' }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.languages.length ? filters.languages.length + ' selected' : 'All Languages'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg">
+                        <input
+                            type="text"
+                            x-model="search"
+                            placeholder="Search languages..."
+                            class="w-full px-3 py-2 border-b text-sm"
+                        >
+                        <div class="max-h-48 overflow-auto">
+                            <template x-for="lang in filterOptions.languages?.filter(l => l.toLowerCase().includes(search.toLowerCase()))" :key="lang">
+                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        :value="lang"
+                                        x-model="filters.languages"
+                                        @change="applyFilters()"
+                                        class="w-4 h-4 text-alfa-blue rounded"
+                                    >
+                                    <span class="ml-2 text-sm" x-text="lang"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Owner Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Candidate Recruitment Owner</label>
+                <div class="relative" x-data="{ open: false }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.owners.length ? filters.owners.length + ' selected' : 'All Owners'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                        <template x-for="owner in filterOptions.owners" :key="owner">
+                            <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    :value="owner"
+                                    x-model="filters.owners"
+                                    @change="applyFilters()"
+                                    class="w-4 h-4 text-alfa-blue rounded"
+                                >
+                                <span class="ml-2 text-sm" x-text="owner"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tier Multi-Select -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tier Level</label>
+                <div class="relative" x-data="{ open: false }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.tiers.length ? filters.tiers.length + ' selected' : 'All Tiers'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                        <template x-for="tier in filterOptions.tiers" :key="tier">
+                            <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    :value="tier"
+                                    x-model="filters.tiers"
+                                    @change="applyFilters()"
+                                    class="w-4 h-4 text-alfa-blue rounded"
+                                >
+                                <span class="ml-2 text-sm" x-text="tier"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- State Multi-Select - Hidden for now, can be re-enabled later
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <div class="relative" x-data="{ open: false, search: '' }">
+                    <button
+                        @click="open = !open"
+                        class="w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between bg-white"
+                    >
+                        <span x-text="filters.states.length ? filters.states.length + ' selected' : 'All States'" class="text-sm"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg">
+                        <input
+                            type="text"
+                            x-model="search"
+                            placeholder="Search states..."
+                            class="w-full px-3 py-2 border-b text-sm"
+                        >
+                        <div class="max-h-48 overflow-auto">
+                            <template x-for="st in filterOptions.states?.filter(s => s.toLowerCase().includes(search.toLowerCase()))" :key="st">
+                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        :value="st"
+                                        x-model="filters.states"
+                                        @change="applyFilters()"
+                                        class="w-4 h-4 text-alfa-blue rounded"
+                                    >
+                                    <span class="ml-2 text-sm" x-text="st"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            -->
+
+            <!-- Status Filters -->
+            <div class="lg:col-span-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status Filters</label>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.unresponsive"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Unresponsive</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.pendingDocs"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Pending Documents</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.needsTraining"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Needs Training</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.langAssessmentPassed"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Lang Assessment Passed</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.bgvPassed"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">BGV Passed</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.systemSpecsApproved"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">System Specs Approved</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            x-model="filters.offerAccepted"
+                            @change="applyFilters()"
+                            class="w-4 h-4 text-alfa-blue rounded focus:ring-alfa-blue"
+                        >
+                        <span class="text-sm text-gray-600">Offer Accepted</span>
+                    </label>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div x-show="loading" class="flex items-center justify-center h-64">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Pipeline View (Kanban) -->
+    <div x-show="!loading && viewMode === 'pipeline'" x-cloak class="overflow-x-auto pb-4">
+        <div class="flex gap-4 min-w-max">
+            <template x-for="stage in filteredPipeline" :key="stage.stage">
+                <div class="w-72 flex-shrink-0">
+                    <!-- Stage Header -->
+                    <div
+                        class="rounded-t-lg p-3 flex items-center justify-between"
+                        :class="getStageHeaderColor(stage.stage)"
+                    >
+                        <span class="font-semibold text-white" x-text="stage.stage"></span>
+                        <span class="bg-white/20 text-white px-2 py-0.5 rounded-full text-sm" x-text="stage.count"></span>
+                    </div>
+
+                    <!-- Stage Cards -->
+                    <div class="bg-gray-100 rounded-b-lg p-2 min-h-[400px] space-y-2">
+                        <template x-for="candidate in stage.candidates" :key="candidate.id">
+                            <div
+                                class="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                @click="goToDetail(candidate.id)"
+                            >
+                                <!-- Name and Status Indicators -->
+                                <div class="flex items-start justify-between mb-2">
+                                    <span class="font-medium text-gray-800 text-sm leading-tight" x-text="candidate.full_name"></span>
+                                    <div class="flex gap-1 flex-shrink-0">
+                                        <span
+                                            x-show="candidate.is_unresponsive"
+                                            class="w-2 h-2 bg-red-500 rounded-full"
+                                            title="Unresponsive"
+                                        ></span>
+                                        <span
+                                            x-show="candidate.has_pending_documents"
+                                            class="w-2 h-2 bg-yellow-500 rounded-full"
+                                            title="Pending Documents"
+                                        ></span>
+                                        <span
+                                            x-show="candidate.needs_training"
+                                            class="w-2 h-2 bg-purple-500 rounded-full"
+                                            title="Needs Training"
+                                        ></span>
+                                    </div>
+                                </div>
+
+                                <!-- Badges Row: Tier + Language -->
+                                <div class="flex flex-wrap gap-1 mb-2">
+                                    <span
+                                        x-show="candidate.tier"
+                                        class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                        :class="{
+                                            'bg-green-100 text-green-700': candidate.tier === 'Tier 1',
+                                            'bg-blue-100 text-blue-700': candidate.tier === 'Tier 2',
+                                            'bg-purple-100 text-purple-700': candidate.tier === 'Tier 3'
+                                        }"
+                                        x-text="candidate.tier"
+                                    ></span>
+                                    <span
+                                        x-show="candidate.languages"
+                                        class="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 rounded truncate max-w-[100px]"
+                                        x-text="candidate.languages?.split(';')[0] || candidate.languages"
+                                        :title="candidate.languages"
+                                    ></span>
+                                </div>
+
+                                <!-- Days in Stage -->
+                                <div class="text-xs text-gray-500">
+                                    <span x-text="candidate.days_in_stage + ' days in stage'"></span>
+                                </div>
+
+                                <!-- Quick Actions -->
+                                <div class="flex gap-1 mt-2 pt-2 border-t" @click.stop>
+                                    <button
+                                        @click="moveToPrevStage(candidate)"
+                                        class="p-1 text-gray-400 hover:text-alfa-blue hover:bg-blue-50 rounded"
+                                        title="Move to previous stage"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="moveToNextStage(candidate)"
+                                        class="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                                        title="Move to next stage"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="toggleUnresponsive(candidate)"
+                                        class="p-1 rounded"
+                                        :class="candidate.is_unresponsive ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'"
+                                        title="Toggle unresponsive"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <div
+                            x-show="stage.candidates.length === 0"
+                            class="text-center py-8 text-gray-400"
+                        >
+                            <p class="text-sm">No candidates</p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- List View -->
+    <div x-show="!loading && viewMode === 'list'" x-cloak class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-50 border-b">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days in Stage</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+                <template x-for="candidate in candidates" :key="candidate.id">
+                    <tr class="hover:bg-gray-50 cursor-pointer" @click="goToDetail(candidate.id)">
+                        <td class="px-4 py-3">
+                            <span class="font-medium text-gray-800" x-text="candidate.full_name"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span
+                                class="px-2 py-1 text-xs rounded-full"
+                                :class="getStageBadgeColor(candidate.stage)"
+                                x-text="candidate.stage"
+                            ></span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500" x-text="candidate.days_in_stage + ' days'"></td>
+                        <td class="px-4 py-3 text-sm text-gray-500" x-text="candidate.email || '-'"></td>
+                        <td class="px-4 py-3">
+                            <div class="flex gap-1">
+                                <span
+                                    x-show="candidate.is_unresponsive"
+                                    class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full"
+                                >Unresponsive</span>
+                                <span
+                                    x-show="candidate.has_pending_documents"
+                                    class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full"
+                                >Pending Docs</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3" @click.stop>
+                            <div class="flex gap-1">
+                                <a
+                                    :href="candidate.zoho_url"
+                                    target="_blank"
+                                    class="p-1 text-gray-400 hover:text-alfa-blue hover:bg-blue-50 rounded"
+                                    title="View in Zoho CRM"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                    </svg>
+                                </a>
+                                <button
+                                    @click="toggleUnresponsive(candidate)"
+                                    class="p-1 rounded"
+                                    :class="candidate.is_unresponsive ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500'"
+                                    title="Toggle unresponsive"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+
+                <!-- Empty State -->
+                <tr x-show="candidates.length === 0">
+                    <td colspan="6" class="px-4 py-12 text-center text-gray-500">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p>No candidates found</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Save Preset Modal -->
+    <div
+        x-show="showSavePresetModal"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showSavePresetModal = false"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showSavePresetModal = false"></div>
+            <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Save Filter Preset</h3>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Preset Name</label>
+                    <input
+                        type="text"
+                        x-model="newPresetName"
+                        @keydown.enter="savePreset()"
+                        placeholder="e.g., My Spanish Candidates"
+                        class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                    >
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button
+                        @click="showSavePresetModal = false"
+                        class="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        @click="savePreset()"
+                        class="px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700"
+                    >
+                        Save Preset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Candidate Detail Modal -->
+    <div
+        x-show="selectedCandidate"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="selectedCandidate = null"
+    >
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <!-- Backdrop -->
+            <div
+                class="fixed inset-0 bg-black/50 transition-opacity"
+                @click="selectedCandidate = null"
+            ></div>
+
+            <!-- Modal -->
+            <div class="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <!-- Header -->
+                    <div class="flex items-start justify-between mb-6">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-800" x-text="selectedCandidate?.full_name"></h2>
+                            <p class="text-sm text-gray-500" x-text="selectedCandidate?.email"></p>
+                        </div>
+                        <button
+                            @click="selectedCandidate = null"
+                            class="p-1 text-gray-400 hover:text-gray-600"
+                        >
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Info Grid -->
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Stage</p>
+                            <p class="font-medium" x-text="selectedCandidate?.stage"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Days in Stage</p>
+                            <p class="font-medium" x-text="selectedCandidate?.days_in_stage"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Phone</p>
+                            <p class="font-medium" x-text="selectedCandidate?.phone || '-'"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 uppercase">Languages</p>
+                            <p class="font-medium" x-text="selectedCandidate?.languages || '-'"></p>
+                        </div>
+                    </div>
+
+                    <!-- Move Stage -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Move to Stage</label>
+                        <select
+                            x-model="newStage"
+                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                        >
+                            <option value="">Select new stage...</option>
+                            <option value="New Candidate">New Candidate</option>
+                            <option value="Screening">Screening</option>
+                            <option value="Interview Scheduled">Interview Scheduled</option>
+                            <option value="Interview Completed">Interview Completed</option>
+                            <option value="Assessment">Assessment</option>
+                            <option value="Onboarding">Onboarding</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex gap-3">
+                        <button
+                            @click="moveStage()"
+                            :disabled="!newStage"
+                            class="flex-1 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Update Stage
+                        </button>
+                        <a
+                            :href="selectedCandidate?.zoho_url"
+                            target="_blank"
+                            class="px-4 py-2 border rounded-lg hover:bg-gray-50 inline-flex items-center gap-2"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                            </svg>
+                            Open in Zoho
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function candidatesApp() {
+    return {
+        loading: true,
+        viewMode: 'pipeline',
+        showAdvancedFilters: false,
+        showSavePresetModal: false,
+        newPresetName: '',
+        savedPresets: JSON.parse(localStorage.getItem('candidateFilterPresets') || '[]'),
+        candidates: [],
+        pipeline: [],
+        filterOptions: { languages: [], owners: [], stages: {}, tiers: [], states: [] },
+        selectedCandidate: null,
+        newStage: '',
+        filters: {
+            search: '',
+            stages: [],
+            languages: [],
+            owners: [],
+            tiers: [],
+            states: [],
+            daysMin: '',
+            daysMax: '',
+            dateFrom: '',
+            dateTo: '',
+            unresponsive: false,
+            pendingDocs: false,
+            needsTraining: false,
+            langAssessmentPassed: false,
+            bgvPassed: false,
+            systemSpecsApproved: false,
+            offerAccepted: false
+        },
+        allStages: [
+            'New Candidate',
+            'Screening',
+            'Interview Scheduled',
+            'Interview Completed',
+            'Assessment',
+            'Onboarding',
+            'Active',
+            'Inactive',
+            'Rejected'
+        ],
+
+        get filteredPipeline() {
+            if (!this.filters.stages.length) {
+                return this.pipeline;
+            }
+            return this.pipeline.filter(stage => this.filters.stages.includes(stage.stage));
+        },
+
+        get hasActiveFilters() {
+            return this.filters.search ||
+                   this.filters.stages.length > 0 ||
+                   this.filters.languages.length > 0 ||
+                   this.filters.owners.length > 0 ||
+                   this.filters.tiers.length > 0 ||
+                   this.filters.states.length > 0 ||
+                   this.filters.daysMin ||
+                   this.filters.daysMax ||
+                   this.filters.dateFrom ||
+                   this.filters.dateTo ||
+                   this.filters.unresponsive ||
+                   this.filters.pendingDocs ||
+                   this.filters.needsTraining ||
+                   this.filters.langAssessmentPassed ||
+                   this.filters.bgvPassed ||
+                   this.filters.systemSpecsApproved ||
+                   this.filters.offerAccepted;
+        },
+
+        get activeFilterCount() {
+            let count = 0;
+            if (this.filters.stages.length) count++;
+            if (this.filters.languages.length) count++;
+            if (this.filters.owners.length) count++;
+            if (this.filters.tiers.length) count++;
+            if (this.filters.states.length) count++;
+            if (this.filters.daysMin || this.filters.daysMax) count++;
+            if (this.filters.dateFrom || this.filters.dateTo) count++;
+            if (this.filters.unresponsive) count++;
+            if (this.filters.pendingDocs) count++;
+            if (this.filters.needsTraining) count++;
+            if (this.filters.langAssessmentPassed) count++;
+            if (this.filters.bgvPassed) count++;
+            if (this.filters.systemSpecsApproved) count++;
+            if (this.filters.offerAccepted) count++;
+            return count;
+        },
+
+        async init() {
+            // Load filters from URL params
+            this.loadFiltersFromUrl();
+            await this.fetchFilterOptions();
+            await this.fetchPipeline();
+            await this.fetchCandidates();
+            this.loading = false;
+        },
+
+        loadFiltersFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('search')) this.filters.search = params.get('search');
+            if (params.get('stages')) this.filters.stages = params.get('stages').split(',');
+            if (params.get('languages')) this.filters.languages = params.get('languages').split(',');
+            if (params.get('owners')) this.filters.owners = params.get('owners').split(',');
+            if (params.get('tiers')) this.filters.tiers = params.get('tiers').split(',');
+            if (params.get('states')) this.filters.states = params.get('states').split(',');
+            if (params.get('days_min')) this.filters.daysMin = params.get('days_min');
+            if (params.get('days_max')) this.filters.daysMax = params.get('days_max');
+            if (params.get('date_from')) this.filters.dateFrom = params.get('date_from');
+            if (params.get('date_to')) this.filters.dateTo = params.get('date_to');
+            if (params.get('unresponsive') === 'true') this.filters.unresponsive = true;
+            if (params.get('pending_docs') === 'true') this.filters.pendingDocs = true;
+            if (params.get('needs_training') === 'true') this.filters.needsTraining = true;
+            if (params.get('lang_assessment_passed') === 'true') this.filters.langAssessmentPassed = true;
+            if (params.get('bgv_passed') === 'true') this.filters.bgvPassed = true;
+            if (params.get('system_specs_approved') === 'true') this.filters.systemSpecsApproved = true;
+            if (params.get('offer_accepted') === 'true') this.filters.offerAccepted = true;
+            if (params.get('view')) this.viewMode = params.get('view');
+
+            // Show advanced filters if any are active
+            if (this.hasActiveFilters) this.showAdvancedFilters = true;
+        },
+
+        updateUrl() {
+            const params = new URLSearchParams();
+            if (this.filters.search) params.set('search', this.filters.search);
+            if (this.filters.stages.length) params.set('stages', this.filters.stages.join(','));
+            if (this.filters.languages.length) params.set('languages', this.filters.languages.join(','));
+            if (this.filters.owners.length) params.set('owners', this.filters.owners.join(','));
+            if (this.filters.tiers.length) params.set('tiers', this.filters.tiers.join(','));
+            if (this.filters.states.length) params.set('states', this.filters.states.join(','));
+            if (this.filters.daysMin) params.set('days_min', this.filters.daysMin);
+            if (this.filters.daysMax) params.set('days_max', this.filters.daysMax);
+            if (this.filters.dateFrom) params.set('date_from', this.filters.dateFrom);
+            if (this.filters.dateTo) params.set('date_to', this.filters.dateTo);
+            if (this.filters.unresponsive) params.set('unresponsive', 'true');
+            if (this.filters.pendingDocs) params.set('pending_docs', 'true');
+            if (this.filters.needsTraining) params.set('needs_training', 'true');
+            if (this.filters.langAssessmentPassed) params.set('lang_assessment_passed', 'true');
+            if (this.filters.bgvPassed) params.set('bgv_passed', 'true');
+            if (this.filters.systemSpecsApproved) params.set('system_specs_approved', 'true');
+            if (this.filters.offerAccepted) params.set('offer_accepted', 'true');
+            if (this.viewMode !== 'pipeline') params.set('view', this.viewMode);
+
+            const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        },
+
+        clearFilters() {
+            this.filters = {
+                search: '',
+                stages: [],
+                languages: [],
+                owners: [],
+                tiers: [],
+                states: [],
+                daysMin: '',
+                daysMax: '',
+                dateFrom: '',
+                dateTo: '',
+                unresponsive: false,
+                pendingDocs: false,
+                needsTraining: false,
+                langAssessmentPassed: false,
+                bgvPassed: false,
+                systemSpecsApproved: false,
+                offerAccepted: false
+            };
+            this.applyFilters();
+        },
+
+        async applyFilters() {
+            this.updateUrl();
+            await this.fetchCandidates();
+        },
+
+        async fetchFilterOptions() {
+            try {
+                const response = await fetch('/api/candidates/filter-options');
+                this.filterOptions = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch filter options:', error);
+            }
+        },
+
+        async fetchPipeline() {
+            try {
+                const response = await fetch('/api/candidates/pipeline?include_candidates=true');
+                this.pipeline = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch pipeline:', error);
+            }
+        },
+
+        async fetchCandidates() {
+            try {
+                const params = new URLSearchParams();
+                if (this.filters.search) params.append('search', this.filters.search);
+                if (this.filters.stages.length) params.append('stage', this.filters.stages.join(','));
+                if (this.filters.languages.length) params.append('language', this.filters.languages.join(','));
+                if (this.filters.owners.length) params.append('owner', this.filters.owners.join(','));
+                if (this.filters.tiers.length) params.append('tier', this.filters.tiers.join(','));
+                if (this.filters.states.length) params.append('state', this.filters.states.join(','));
+                if (this.filters.daysMin) params.append('days_min', this.filters.daysMin);
+                if (this.filters.daysMax) params.append('days_max', this.filters.daysMax);
+                if (this.filters.dateFrom) params.append('date_from', this.filters.dateFrom);
+                if (this.filters.dateTo) params.append('date_to', this.filters.dateTo);
+                if (this.filters.unresponsive) params.append('unresponsive', 'true');
+                if (this.filters.pendingDocs) params.append('pending_docs', 'true');
+                if (this.filters.needsTraining) params.append('needs_training', 'true');
+                if (this.filters.langAssessmentPassed) params.append('lang_assessment_passed', 'true');
+                if (this.filters.bgvPassed) params.append('bgv_passed', 'true');
+                if (this.filters.systemSpecsApproved) params.append('system_specs_approved', 'true');
+                if (this.filters.offerAccepted) params.append('offer_accepted', 'true');
+
+                const response = await fetch(`/api/candidates/?${params}`);
+                this.candidates = await response.json();
+            } catch (error) {
+                console.error('Failed to fetch candidates:', error);
+            }
+        },
+
+        goToDetail(candidateId) {
+            window.location.href = `/candidates/${candidateId}`;
+        },
+
+        openCandidateDetail(candidate) {
+            this.selectedCandidate = candidate;
+            this.newStage = '';
+        },
+
+        async moveStage() {
+            if (!this.newStage || !this.selectedCandidate) return;
+
+            try {
+                const response = await fetch(
+                    `/api/candidates/${this.selectedCandidate.id}/move-stage?new_stage=${encodeURIComponent(this.newStage)}`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    this.selectedCandidate.stage = this.newStage;
+                    this.selectedCandidate.days_in_stage = 0;
+                    await this.fetchPipeline();
+                    await this.fetchCandidates();
+                    this.selectedCandidate = null;
+                }
+            } catch (error) {
+                console.error('Failed to move stage:', error);
+            }
+        },
+
+        async toggleUnresponsive(candidate) {
+            try {
+                const newValue = !candidate.is_unresponsive;
+                const response = await fetch(
+                    `/api/candidates/${candidate.id}/flag-unresponsive?unresponsive=${newValue}`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    candidate.is_unresponsive = newValue;
+                }
+            } catch (error) {
+                console.error('Failed to toggle unresponsive:', error);
+            }
+        },
+
+        async moveToNextStage(candidate) {
+            const currentIndex = this.stages.indexOf(candidate.stage);
+            if (currentIndex < this.stages.length - 1) {
+                const nextStage = this.stages[currentIndex + 1];
+                try {
+                    const response = await fetch(
+                        `/api/candidates/${candidate.id}/move-stage?new_stage=${encodeURIComponent(nextStage)}`,
+                        { method: 'POST' }
+                    );
+                    if (response.ok) {
+                        await this.fetchPipeline();
+                    }
+                } catch (error) {
+                    console.error('Failed to move stage:', error);
+                }
+            }
+        },
+
+        async moveToPrevStage(candidate) {
+            const currentIndex = this.stages.indexOf(candidate.stage);
+            if (currentIndex > 0) {
+                const prevStage = this.stages[currentIndex - 1];
+                try {
+                    const response = await fetch(
+                        `/api/candidates/${candidate.id}/move-stage?new_stage=${encodeURIComponent(prevStage)}`,
+                        { method: 'POST' }
+                    );
+                    if (response.ok) {
+                        await this.fetchPipeline();
+                    }
+                } catch (error) {
+                    console.error('Failed to move stage:', error);
+                }
+            }
+        },
+
+        getStageHeaderColor(stage) {
+            const colors = {
+                'New Candidate': 'bg-blue-500',
+                'Screening': 'bg-yellow-500',
+                'Interview Scheduled': 'bg-orange-500',
+                'Interview Completed': 'bg-purple-500',
+                'Assessment': 'bg-pink-500',
+                'Onboarding': 'bg-indigo-500',
+                'Active': 'bg-green-500',
+                'Inactive': 'bg-gray-500',
+                'Rejected': 'bg-red-500'
+            };
+            return colors[stage] || 'bg-gray-500';
+        },
+
+        getStageBadgeColor(stage) {
+            const colors = {
+                'New Candidate': 'bg-blue-100 text-blue-700',
+                'Screening': 'bg-yellow-100 text-yellow-700',
+                'Interview Scheduled': 'bg-orange-100 text-orange-700',
+                'Interview Completed': 'bg-purple-100 text-purple-700',
+                'Assessment': 'bg-pink-100 text-pink-700',
+                'Onboarding': 'bg-indigo-100 text-indigo-700',
+                'Active': 'bg-green-100 text-green-700',
+                'Inactive': 'bg-gray-100 text-gray-700',
+                'Rejected': 'bg-red-100 text-red-700'
+            };
+            return colors[stage] || 'bg-gray-100 text-gray-700';
+        },
+
+        // Preset functions
+        savePreset() {
+            if (!this.newPresetName.trim()) return;
+
+            const preset = {
+                name: this.newPresetName.trim(),
+                filters: JSON.parse(JSON.stringify(this.filters)),
+                createdAt: new Date().toISOString()
+            };
+
+            // Remove existing preset with same name
+            this.savedPresets = this.savedPresets.filter(p => p.name !== preset.name);
+            this.savedPresets.unshift(preset);
+
+            // Save to localStorage
+            localStorage.setItem('candidateFilterPresets', JSON.stringify(this.savedPresets));
+
+            this.newPresetName = '';
+            this.showSavePresetModal = false;
+        },
+
+        applyPreset(preset) {
+            this.filters = JSON.parse(JSON.stringify(preset.filters));
+            this.showAdvancedFilters = true;
+            this.applyFilters();
+        },
+
+        deletePreset(name) {
+            this.savedPresets = this.savedPresets.filter(p => p.name !== name);
+            localStorage.setItem('candidateFilterPresets', JSON.stringify(this.savedPresets));
+        }
+    };
+}
+</script>
+{% endblock %}
