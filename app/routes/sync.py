@@ -238,44 +238,51 @@ async def debug_zoho_bookings():
     Debug endpoint to see raw Zoho Bookings data.
     Shows actual booking appointments with their status (COMPLETED, NO_SHOW, etc.)
     """
-    from app.integrations.zoho.crm import ZohoCRM
+    from app.integrations.zoho.bookings import get_zoho_bookings
     from datetime import datetime, timedelta
 
     try:
-        crm = ZohoCRM()
+        bookings_api = await get_zoho_bookings()
+
+        # Check configuration
+        config_info = {
+            "is_configured": bookings_api.is_configured(),
+            "has_dedicated_credentials": bookings_api.has_dedicated_credentials(),
+            "using_fallback": not bookings_api.has_dedicated_credentials() and bookings_api.is_configured()
+        }
+
+        if not bookings_api.is_configured():
+            return {
+                "error": "Zoho Bookings not configured",
+                "config_info": config_info,
+                "instructions": "Add ZOHO_BOOKINGS_CLIENT_ID, ZOHO_BOOKINGS_CLIENT_SECRET, and ZOHO_BOOKINGS_REFRESH_TOKEN to .env"
+            }
 
         # Fetch bookings from last 30 days
         to_date = datetime.utcnow()
         from_date = to_date - timedelta(days=30)
 
-        response = await crm.get_bookings(
+        result = await bookings_api.fetch_appointments(
             from_date=from_date,
             to_date=to_date,
             page=1,
             per_page=50
         )
 
-        # Parse the response - Zoho Bookings has nested structure
-        bookings = []
-        if "response" in response:
-            return_value = response.get("response", {}).get("returnvalue", {})
-            if isinstance(return_value, dict):
-                bookings = return_value.get("data", [])
-            elif isinstance(return_value, list):
-                bookings = return_value
+        appointments = result.get("appointments", [])
 
         # Count by status
         status_counts = {}
-        for booking in bookings:
+        for booking in appointments:
             status = booking.get("status", "UNKNOWN")
             status_counts[status] = status_counts.get(status, 0) + 1
 
         return {
-            "total_bookings": len(bookings),
+            "config_info": config_info,
+            "total_bookings": len(appointments),
             "status_counts": status_counts,
-            "sample_bookings": bookings[:5],
-            "next_page_available": response.get("next_page_available", False),
-            "raw_response_keys": list(response.keys()) if response else []
+            "sample_bookings": appointments[:5],
+            "next_page_available": result.get("next_page_available", False)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug bookings failed: {str(e)}")
