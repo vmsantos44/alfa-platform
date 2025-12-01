@@ -181,6 +181,42 @@ async def get_pipeline_metrics(
 
 
 # ============================================
+# Debug/Diagnostic Endpoints
+# ============================================
+
+@router.get("/debug/stage-distribution")
+async def get_stage_distribution(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Debug endpoint: Show all unique stage values and their counts
+    """
+    result = await db.execute(
+        select(CandidateCache.stage, func.count(CandidateCache.id).label('count'))
+        .group_by(CandidateCache.stage)
+        .order_by(func.count(CandidateCache.id).desc())
+    )
+    stages = [{"stage": row[0], "count": row[1]} for row in result.all()]
+    return {"stages": stages, "total_unique_stages": len(stages)}
+
+
+@router.get("/debug/candidate-status-distribution")
+async def get_candidate_status_distribution(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Debug endpoint: Show all unique candidate_status values and their counts
+    """
+    result = await db.execute(
+        select(CandidateCache.candidate_status, func.count(CandidateCache.id).label('count'))
+        .group_by(CandidateCache.candidate_status)
+        .order_by(func.count(CandidateCache.id).desc())
+    )
+    statuses = [{"status": row[0], "count": row[1]} for row in result.all()]
+    return {"statuses": statuses, "total_unique_statuses": len(statuses)}
+
+
+# ============================================
 # Recruiter Performance Report
 # ============================================
 
