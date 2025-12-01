@@ -550,31 +550,40 @@
                         </div>
                     </div>
 
-                    <!-- CRM Notes (synced from Zoho) -->
+                    <!-- CRM Notes (synced from Zoho) - Combined Summary View -->
                     <div x-show="candidate.crm_notes?.length > 0">
-                        <h3 class="font-semibold text-gray-800 mb-3">CRM Notes</h3>
-                        <div class="space-y-4">
-                            <template x-for="note in candidate.crm_notes" :key="note.id">
-                                <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
-                                    <div class="flex items-start justify-between mb-2">
-                                        <div class="flex items-center gap-2">
-                                            <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">CRM</span>
-                                            <span x-show="note.title" class="text-sm font-medium text-gray-700" x-text="note.title"></span>
-                                            <span class="text-xs text-gray-500" x-text="formatDateTime(note.zoho_created_time)"></span>
-                                            <span x-show="note.created_by" class="text-xs text-gray-400" x-text="'by ' + note.created_by"></span>
+                        <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">CRM Notes</span>
+                                    <span class="text-sm text-gray-600" x-text="candidate.crm_notes?.length + ' note' + (candidate.crm_notes?.length !== 1 ? 's' : '')"></span>
+                                </div>
+                                <span class="text-xs text-gray-500" x-text="'Latest: ' + formatDateTime(candidate.crm_notes?.[0]?.zoho_created_time)"></span>
+                            </div>
+
+                            <!-- Combined Summary of all notes -->
+                            <div class="text-gray-800 mb-3">
+                                <p x-text="getCrmNotesSummary()"></p>
+                            </div>
+
+                            <!-- Expandable detailed notes (newest first) -->
+                            <details class="mt-2">
+                                <summary class="text-sm text-blue-600 cursor-pointer hover:text-blue-800 font-medium">
+                                    View all notes
+                                </summary>
+                                <div class="mt-3 space-y-3 max-h-96 overflow-y-auto">
+                                    <template x-for="note in candidate.crm_notes" :key="note.id">
+                                        <div class="bg-white rounded p-3 border border-gray-200">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <span x-show="note.title" class="text-sm font-medium text-gray-700" x-text="note.title"></span>
+                                                <span class="text-xs text-gray-500" x-text="formatDateTime(note.zoho_created_time)"></span>
+                                                <span x-show="note.created_by" class="text-xs text-gray-400" x-text="'by ' + note.created_by"></span>
+                                            </div>
+                                            <p class="text-sm text-gray-700 whitespace-pre-wrap" x-text="note.raw_content"></p>
                                         </div>
-                                    </div>
-                                    <!-- Show summary by default -->
-                                    <p class="text-gray-800" x-text="note.summary || note.raw_content"></p>
-                                    <!-- Expand to show full content if different from summary -->
-                                    <template x-if="note.summary && note.summary !== note.raw_content">
-                                        <details class="mt-2">
-                                            <summary class="text-xs text-blue-600 cursor-pointer hover:text-blue-800">Show full note</summary>
-                                            <p class="mt-2 text-gray-700 text-sm whitespace-pre-wrap bg-white p-2 rounded" x-text="note.raw_content"></p>
-                                        </details>
                                     </template>
                                 </div>
-                            </template>
+                            </details>
                         </div>
                     </div>
 
@@ -718,6 +727,39 @@ function candidateDetailApp() {
             } catch (error) {
                 console.error('Failed to delete note:', error);
             }
+        },
+
+        getCrmNotesSummary() {
+            // Create a combined summary from all CRM notes
+            if (!this.candidate?.crm_notes?.length) return '';
+
+            const notes = this.candidate.crm_notes;
+            const maxLength = 300;
+
+            // If only one note, just return its summary
+            if (notes.length === 1) {
+                return notes[0].summary || notes[0].raw_content;
+            }
+
+            // Combine summaries from the most recent notes
+            let combined = '';
+            for (let i = 0; i < Math.min(3, notes.length); i++) {
+                const note = notes[i];
+                const summary = note.summary || note.raw_content;
+                if (combined.length + summary.length < maxLength) {
+                    combined += (combined ? ' • ' : '') + summary;
+                } else {
+                    break;
+                }
+            }
+
+            // Add count of additional notes if there are more
+            const remaining = notes.length - 3;
+            if (remaining > 0) {
+                combined += ` (+${remaining} more)`;
+            }
+
+            return combined || notes[0].summary || notes[0].raw_content;
         },
 
         getStageBadgeColor(stage) {
