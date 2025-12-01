@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     zoho_mail_api_url: str = "https://mail.zoho.com/api"
     zoho_workdrive_api_url: str = "https://www.zohoapis.com/workdrive"
     zoho_from_email: str = ""
+
+    # Zoho Mail OAuth (separate client for mail integration)
+    zoho_mail_client_id: str = ""
+    zoho_mail_client_secret: str = ""
+    zoho_mail_redirect_uri: str = "http://localhost:8003/oauth/callback"
+    zoho_mail_refresh_token: str = ""
+    zoho_mail_account_id: str = ""
     
     # CRM API proxy (alfacrm.site)
     crm_api_url: str = ""
