@@ -50,7 +50,7 @@ class SchedulerService:
             print(f"[Scheduler] Job {event.job_id} completed successfully")
 
     async def _sync_job(self):
-        """The actual sync job that runs on schedule"""
+        """The actual sync job that runs on schedule - syncs candidates and interviews"""
         if SchedulerService._sync_in_progress:
             print("[Scheduler] Sync already in progress, skipping...")
             return
@@ -60,13 +60,30 @@ class SchedulerService:
 
         try:
             print(f"[Scheduler] Starting auto-sync at {datetime.utcnow().isoformat()}")
-            result = await SyncService.sync_candidates_from_zoho()
+
+            # Sync candidates
+            print("[Scheduler] Syncing candidates...")
+            candidate_result = await SyncService.sync_candidates_from_zoho()
+
+            # Sync interviews
+            print("[Scheduler] Syncing interviews...")
+            interview_result = await SyncService.sync_interviews_from_zoho()
+
+            # Combine results
+            result = {
+                "candidates": candidate_result,
+                "interviews": interview_result,
+                "records_processed": candidate_result['records_processed'] + interview_result['records_processed'],
+                "records_created": candidate_result['records_created'] + interview_result['records_created'],
+                "records_updated": candidate_result['records_updated'] + interview_result['records_updated'],
+            }
 
             SchedulerService._last_sync_result = result
             SchedulerService._last_sync_time = datetime.utcnow()
 
-            print(f"[Scheduler] Auto-sync completed: {result['records_processed']} processed, "
-                  f"{result['records_created']} created, {result['records_updated']} updated")
+            print(f"[Scheduler] Auto-sync completed: "
+                  f"Candidates ({candidate_result['records_processed']} processed), "
+                  f"Interviews ({interview_result['records_processed']} processed)")
 
         except Exception as e:
             SchedulerService._last_sync_error = str(e)
