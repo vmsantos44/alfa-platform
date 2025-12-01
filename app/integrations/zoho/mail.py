@@ -161,12 +161,14 @@ class ZohoMailAPI:
             raise Exception("Could not find inbox folder")
 
         params = {
+            "folderId": folder_id,
             "limit": min(limit, 200),
             "start": start,
+            "includeto": "true",
         }
 
         response = await self.client.get(
-            f"{self.settings.zoho_mail_api_url}/accounts/{self.account_id}/folders/{folder_id}/messages",
+            f"{self.settings.zoho_mail_api_url}/accounts/{self.account_id}/messages/view",
             headers=headers,
             params=params
         )
