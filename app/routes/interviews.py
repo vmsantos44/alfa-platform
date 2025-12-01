@@ -103,18 +103,45 @@ async def get_upcoming_interviews(
 @router.get("/no-shows", response_model=List[InterviewResponse])
 async def get_no_shows(
     pending_followup: bool = Query(True, description="Only show those needing follow-up"),
+    days: Optional[int] = Query(None, description="Filter to last N days (7, 30, 90, or None for all)"),
+    limit: int = Query(50, le=200, description="Max results to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all no-show interviews"""
+    """Get no-show interviews with optional date filtering and pagination"""
     query = select(Interview).where(Interview.is_no_show == True)
 
     if pending_followup:
         query = query.where(Interview.no_show_followup_sent == False)
 
-    query = query.order_by(Interview.scheduled_date.desc())
+    if days is not None:
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        query = query.where(Interview.scheduled_date >= cutoff_date)
+
+    query = query.order_by(Interview.scheduled_date.desc()).offset(offset).limit(limit)
 
     result = await db.execute(query)
     return [InterviewResponse.model_validate(i) for i in result.scalars().all()]
+
+
+@router.get("/no-shows/count")
+async def get_no_shows_count(
+    pending_followup: bool = Query(True, description="Only count those needing follow-up"),
+    days: Optional[int] = Query(None, description="Filter to last N days"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get count of no-show interviews for pagination"""
+    query = select(func.count(Interview.id)).where(Interview.is_no_show == True)
+
+    if pending_followup:
+        query = query.where(Interview.no_show_followup_sent == False)
+
+    if days is not None:
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        query = query.where(Interview.scheduled_date >= cutoff_date)
+
+    result = await db.execute(query)
+    return {"count": result.scalar() or 0}
 
 
 @router.get("/{interview_id}", response_model=InterviewResponse)

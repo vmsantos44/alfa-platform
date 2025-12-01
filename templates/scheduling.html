@@ -156,20 +156,46 @@
 
             <!-- No-Shows Needing Follow-up -->
             <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h3 class="font-semibold text-gray-800">No-Shows</h3>
-                    <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full" x-text="noShows.length + ' pending'"></span>
+                <div class="p-4 border-b">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-semibold text-gray-800">No-Shows</h3>
+                        <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full" x-text="noShowsTotal + ' total'"></span>
+                    </div>
+                    <!-- Filter Dropdown -->
+                    <div class="flex items-center gap-2">
+                        <select
+                            x-model="noShowFilter"
+                            @change="fetchNoShows()"
+                            class="text-sm px-2 py-1.5 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-alfa-blue"
+                        >
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="">All time</option>
+                        </select>
+                        <label class="flex items-center gap-1 text-xs text-gray-600">
+                            <input type="checkbox" x-model="noShowPendingOnly" @change="fetchNoShows()" class="rounded">
+                            Pending only
+                        </label>
+                    </div>
                 </div>
                 <div class="p-4">
-                    <div x-show="noShows.length === 0" class="text-center py-4 text-gray-500">
+                    <div x-show="noShowsLoading" class="text-center py-4 text-gray-500">
+                        <svg class="animate-spin h-5 w-5 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <div x-show="!noShowsLoading && noShows.length === 0" class="text-center py-4 text-gray-500">
                         No pending no-shows
                     </div>
-                    <div class="space-y-3">
+                    <!-- Scrollable container with max height -->
+                    <div x-show="!noShowsLoading && noShows.length > 0" class="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                         <template x-for="interview in noShows" :key="interview.id">
                             <div class="p-3 bg-red-50 rounded-lg">
                                 <div class="flex items-center justify-between mb-2">
-                                    <p class="font-medium text-gray-800" x-text="interview.candidate_name"></p>
-                                    <span class="text-xs text-red-600" x-text="'#' + interview.no_show_count + ' no-show'"></span>
+                                    <p class="font-medium text-gray-800 truncate" x-text="interview.candidate_name"></p>
+                                    <span class="text-xs text-red-600 whitespace-nowrap ml-2" x-text="'#' + interview.no_show_count + ' no-show'"></span>
                                 </div>
                                 <p class="text-xs text-gray-500 mb-2" x-text="formatDate(interview.scheduled_date)"></p>
                                 <div class="flex gap-2">
@@ -188,6 +214,17 @@
                                 </div>
                             </div>
                         </template>
+                    </div>
+                    <!-- Load More button -->
+                    <div x-show="!noShowsLoading && noShows.length < noShowsTotal" class="mt-3 text-center">
+                        <button
+                            @click="loadMoreNoShows()"
+                            class="text-sm px-4 py-2 text-alfa-blue hover:bg-blue-50 rounded-lg"
+                            :disabled="noShowsLoadingMore"
+                        >
+                            <span x-show="!noShowsLoadingMore">Load More (<span x-text="noShowsTotal - noShows.length"></span> remaining)</span>
+                            <span x-show="noShowsLoadingMore">Loading...</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -376,6 +413,12 @@ function schedulingApp() {
         calendarData: {},
         todayInterviews: [],
         noShows: [],
+        noShowsTotal: 0,
+        noShowFilter: '30',  // Default to last 30 days
+        noShowPendingOnly: true,
+        noShowsLoading: false,
+        noShowsLoadingMore: false,
+        noShowsLimit: 20,
         stats: {
             today: 0,
             this_week: 0,
@@ -486,11 +529,52 @@ function schedulingApp() {
         },
 
         async fetchNoShows() {
+            this.noShowsLoading = true;
             try {
-                const response = await fetch('/api/interviews/no-shows?pending_followup=true');
-                this.noShows = await response.json();
+                const params = new URLSearchParams({
+                    pending_followup: this.noShowPendingOnly,
+                    limit: this.noShowsLimit,
+                    offset: 0
+                });
+                if (this.noShowFilter) {
+                    params.append('days', this.noShowFilter);
+                }
+
+                // Fetch both count and data in parallel
+                const [countResponse, dataResponse] = await Promise.all([
+                    fetch(`/api/interviews/no-shows/count?pending_followup=${this.noShowPendingOnly}${this.noShowFilter ? '&days=' + this.noShowFilter : ''}`),
+                    fetch(`/api/interviews/no-shows?${params}`)
+                ]);
+
+                const countData = await countResponse.json();
+                this.noShowsTotal = countData.count;
+                this.noShows = await dataResponse.json();
             } catch (error) {
                 console.error('Failed to fetch no-shows:', error);
+            } finally {
+                this.noShowsLoading = false;
+            }
+        },
+
+        async loadMoreNoShows() {
+            this.noShowsLoadingMore = true;
+            try {
+                const params = new URLSearchParams({
+                    pending_followup: this.noShowPendingOnly,
+                    limit: this.noShowsLimit,
+                    offset: this.noShows.length
+                });
+                if (this.noShowFilter) {
+                    params.append('days', this.noShowFilter);
+                }
+
+                const response = await fetch(`/api/interviews/no-shows?${params}`);
+                const moreNoShows = await response.json();
+                this.noShows = [...this.noShows, ...moreNoShows];
+            } catch (error) {
+                console.error('Failed to load more no-shows:', error);
+            } finally {
+                this.noShowsLoadingMore = false;
             }
         },
 
