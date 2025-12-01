@@ -42,7 +42,7 @@
             </a>
             <div class="flex items-center gap-3">
                 <a
-                    :href="candidate.zoho_url"
+                    :href="candidate?.zoho_url"
                     target="_blank"
                     class="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 text-gray-700"
                 >
@@ -996,7 +996,7 @@
                         <p class="text-lg font-medium">Document management coming soon</p>
                         <p class="text-sm mt-1">View documents in Zoho CRM for now</p>
                         <a
-                            :href="candidate.zoho_url"
+                            :href="candidate?.zoho_url"
                             target="_blank"
                             class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700"
                         >
@@ -1121,6 +1121,7 @@ function candidateDetailApp() {
 
                 if (response.ok) {
                     const note = await response.json();
+                    if (!this.candidate.notes) this.candidate.notes = [];
                     this.candidate.notes.unshift(note);
                     this.newNote.content = '';
                     this.newNote.type = 'general';
@@ -1138,7 +1139,7 @@ function candidateDetailApp() {
                     method: 'DELETE'
                 });
 
-                if (response.ok) {
+                if (response.ok && this.candidate?.notes) {
                     this.candidate.notes = this.candidate.notes.filter(n => n.id !== noteId);
                 }
             } catch (error) {
@@ -1150,7 +1151,7 @@ function candidateDetailApp() {
             // Create a combined summary from all CRM notes
             if (!this.candidate?.crm_notes?.length) return '';
 
-            const notes = this.candidate.crm_notes;
+            const notes = this.candidate?.crm_notes || [];
             const maxLength = 300;
 
             // If only one note, just return its summary
@@ -1184,7 +1185,7 @@ function candidateDetailApp() {
             if (!this.candidate?.crm_notes?.length) return [];
 
             const allPhrases = new Set();
-            for (const note of this.candidate.crm_notes) {
+            for (const note of (this.candidate?.crm_notes || [])) {
                 if (note.key_phrases && Array.isArray(note.key_phrases)) {
                     note.key_phrases.forEach(phrase => allPhrases.add(phrase));
                 }
