@@ -299,3 +299,64 @@ async def debug_zoho_bookings():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug bookings failed: {str(e)}")
+
+
+@router.get("/debug-tasks")
+async def debug_zoho_tasks():
+    """
+    Debug endpoint to check Zoho CRM Tasks module access.
+    Shows available fields and sample task data.
+    """
+    from app.integrations.zoho.crm import ZohoCRM
+
+    try:
+        crm = ZohoCRM()
+
+        # Try to get tasks - common fields in Zoho CRM Tasks module
+        response = await crm.get_records(
+            module="Tasks",
+            page=1,
+            per_page=20,
+            fields=[
+                "id", "Subject", "Due_Date", "Status", "Priority",
+                "What_Id", "$se_module", "Owner", "Created_By",
+                "Description", "Created_Time", "Modified_Time",
+                "Closed_Time", "Remind_At"
+            ]
+        )
+
+        records = response.get("data", [])
+
+        # Count by status
+        status_counts = {}
+        priority_counts = {}
+        for task in records:
+            status = task.get("Status", "Unknown")
+            priority = task.get("Priority", "Unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+            priority_counts[priority] = priority_counts.get(priority, 0) + 1
+
+        # Get field metadata if available
+        field_names = set()
+        for task in records:
+            field_names.update(task.keys())
+
+        return {
+            "access": "SUCCESS",
+            "total_tasks": len(records),
+            "status_counts": status_counts,
+            "priority_counts": priority_counts,
+            "available_fields": sorted(list(field_names)),
+            "sample_tasks": records[:5],
+            "info": response.get("info", {})
+        }
+    except Exception as e:
+        error_msg = str(e)
+        # Check if it's a permissions/scope issue
+        if "INVALID_MODULE" in error_msg or "NO_PERMISSION" in error_msg:
+            return {
+                "access": "DENIED",
+                "error": error_msg,
+                "suggestion": "Tasks module may not be enabled or OAuth scope may not include ZohoCRM.modules.tasks.READ"
+            }
+        raise HTTPException(status_code=500, detail=f"Debug tasks failed: {str(e)}")
