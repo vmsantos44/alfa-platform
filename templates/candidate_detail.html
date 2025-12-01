@@ -60,33 +60,33 @@
                 <!-- Candidate Info -->
                 <div class="flex items-start gap-4">
                     <div class="w-16 h-16 bg-alfa-blue rounded-full flex items-center justify-center text-white text-2xl font-semibold">
-                        <span x-text="candidate.full_name?.charAt(0)?.toUpperCase()"></span>
+                        <span x-text="candidate?.full_name?.charAt(0)?.toUpperCase()"></span>
                     </div>
                     <div>
-                        <h2 class="text-2xl font-semibold text-gray-800" x-text="candidate.full_name"></h2>
-                        <p class="text-gray-500" x-text="candidate.email || 'No email'"></p>
+                        <h2 class="text-2xl font-semibold text-gray-800" x-text="candidate?.full_name"></h2>
+                        <p class="text-gray-500" x-text="candidate?.email || 'No email'"></p>
                         <div class="flex flex-wrap items-center gap-2 mt-2">
                             <!-- Stage Badge -->
                             <span
                                 class="px-3 py-1 text-sm font-medium rounded-full"
-                                :class="getStageBadgeColor(candidate.stage)"
-                                x-text="candidate.stage"
+                                :class="getStageBadgeColor(candidate?.stage)"
+                                x-text="candidate?.stage"
                             ></span>
                             <!-- Tier Badge -->
                             <span
-                                x-show="candidate.tier"
+                                x-show="candidate?.tier"
                                 class="px-2 py-1 text-xs font-medium rounded-full"
                                 :class="{
-                                    'bg-green-100 text-green-700': candidate.tier === 'Tier 1',
-                                    'bg-blue-100 text-blue-700': candidate.tier === 'Tier 2',
-                                    'bg-purple-100 text-purple-700': candidate.tier === 'Tier 3'
+                                    'bg-green-100 text-green-700': candidate?.tier === 'Tier 1',
+                                    'bg-blue-100 text-blue-700': candidate?.tier === 'Tier 2',
+                                    'bg-purple-100 text-purple-700': candidate?.tier === 'Tier 3'
                                 }"
-                                x-text="candidate.tier"
+                                x-text="candidate?.tier"
                             ></span>
                             <!-- Status Flags -->
-                            <span x-show="candidate.is_unresponsive" class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">Unresponsive</span>
-                            <span x-show="candidate.has_pending_documents" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded-full">Pending Docs</span>
-                            <span x-show="candidate.needs_training" class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">Needs Training</span>
+                            <span x-show="candidate?.is_unresponsive" class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">Unresponsive</span>
+                            <span x-show="candidate?.has_pending_documents" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded-full">Pending Docs</span>
+                            <span x-show="candidate?.needs_training" class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">Needs Training</span>
                         </div>
                     </div>
                 </div>
@@ -94,15 +94,15 @@
                 <!-- Quick Stats -->
                 <div class="flex gap-6 text-center">
                     <div class="bg-gray-50 rounded-lg px-4 py-2">
-                        <p class="text-2xl font-bold text-alfa-blue" x-text="candidate.days_in_stage || 0"></p>
+                        <p class="text-2xl font-bold text-alfa-blue" x-text="candidate?.days_in_stage || 0"></p>
                         <p class="text-xs text-gray-500">Days in Stage</p>
                     </div>
                     <div class="bg-gray-50 rounded-lg px-4 py-2">
-                        <p class="text-2xl font-bold text-gray-700" x-text="candidate.interviews?.length || 0"></p>
+                        <p class="text-2xl font-bold text-gray-700" x-text="candidate?.interviews?.length || 0"></p>
                         <p class="text-xs text-gray-500">Interviews</p>
                     </div>
                     <div class="bg-gray-50 rounded-lg px-4 py-2">
-                        <p class="text-2xl font-bold text-gray-700" x-text="candidate.tasks?.length || 0"></p>
+                        <p class="text-2xl font-bold text-gray-700" x-text="candidate?.tasks?.length || 0"></p>
                         <p class="text-xs text-gray-500">Tasks</p>
                     </div>
                 </div>
@@ -133,7 +133,7 @@
                     class="px-6 py-4 font-medium transition-colors"
                 >
                     Notes
-                    <span x-show="(candidate.notes?.length || 0) + (candidate.crm_notes?.length || 0) > 0" class="ml-1 bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="(candidate.notes?.length || 0) + (candidate.crm_notes?.length || 0)"></span>
+                    <span x-show="(candidate?.notes?.length || 0) + (candidate?.crm_notes?.length || 0) > 0" class="ml-1 bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="(candidate?.notes?.length || 0) + (candidate?.crm_notes?.length || 0)"></span>
                 </button>
                 <button
                     @click="activeTab = 'emails'; if (!emailsLoaded) loadEmails();"
@@ -170,19 +170,19 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Email</span>
-                                    <span class="text-gray-800" x-text="candidate.email || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.email || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Phone</span>
-                                    <span class="text-gray-800" x-text="candidate.phone || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.phone || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Mobile</span>
-                                    <span class="text-gray-800" x-text="candidate.mobile || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.mobile || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">WhatsApp</span>
-                                    <span class="text-gray-800" x-text="candidate.whatsapp_number || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.whatsapp_number || '-'"></span>
                                 </div>
                             </div>
                         </div>
@@ -199,19 +199,19 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">City</span>
-                                    <span class="text-gray-800" x-text="candidate.city || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.city || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">State</span>
-                                    <span class="text-gray-800" x-text="candidate.state || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.state || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Country</span>
-                                    <span class="text-gray-800" x-text="candidate.country || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.country || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Service Location</span>
-                                    <span class="text-gray-800" x-text="candidate.service_location || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.service_location || '-'"></span>
                                 </div>
                             </div>
                         </div>
@@ -227,15 +227,15 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Primary</span>
-                                    <span class="text-gray-800" x-text="candidate.language || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.language || '-'"></span>
                                 </div>
                                 <div>
                                     <span class="text-gray-500 block mb-1">All Languages</span>
                                     <div class="flex flex-wrap gap-1">
-                                        <template x-for="lang in (candidate.languages || '').split(';').filter(l => l.trim())" :key="lang">
+                                        <template x-for="lang in (candidate?.languages || '').split(';').filter(l => l.trim())" :key="lang">
                                             <span class="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded" x-text="lang.trim()"></span>
                                         </template>
-                                        <span x-show="!candidate.languages" class="text-gray-400">-</span>
+                                        <span x-show="!candidate?.languages" class="text-gray-400">-</span>
                                     </div>
                                 </div>
                             </div>
@@ -252,19 +252,19 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Candidate Owner</span>
-                                    <span class="text-gray-800" x-text="candidate.candidate_owner || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.candidate_owner || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Recruitment Owner</span>
-                                    <span class="text-gray-800" x-text="candidate.recruitment_owner || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.recruitment_owner || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Assigned Client</span>
-                                    <span class="text-gray-800" x-text="candidate.assigned_client || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.assigned_client || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Agreed Rate</span>
-                                    <span class="text-gray-800" x-text="candidate.agreed_rate || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.agreed_rate || '-'"></span>
                                 </div>
                             </div>
                         </div>
@@ -280,19 +280,19 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Language Assessment</span>
-                                    <span :class="candidate.language_assessment_passed ? 'text-green-600' : 'text-gray-400'" x-text="candidate.language_assessment_passed ? 'Passed' : 'Pending'"></span>
+                                    <span :class="candidate?.language_assessment_passed ? 'text-green-600' : 'text-gray-400'" x-text="candidate?.language_assessment_passed ? 'Passed' : 'Pending'"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Background Check</span>
-                                    <span :class="candidate.bgv_passed ? 'text-green-600' : 'text-gray-400'" x-text="candidate.bgv_passed ? 'Passed' : 'Pending'"></span>
+                                    <span :class="candidate?.bgv_passed ? 'text-green-600' : 'text-gray-400'" x-text="candidate?.bgv_passed ? 'Passed' : 'Pending'"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">System Specs</span>
-                                    <span :class="candidate.system_specs_approved ? 'text-green-600' : 'text-gray-400'" x-text="candidate.system_specs_approved ? 'Approved' : 'Pending'"></span>
+                                    <span :class="candidate?.system_specs_approved ? 'text-green-600' : 'text-gray-400'" x-text="candidate?.system_specs_approved ? 'Approved' : 'Pending'"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Offer Accepted</span>
-                                    <span :class="candidate.offer_accepted ? 'text-green-600' : 'text-gray-400'" x-text="candidate.offer_accepted ? 'Yes' : 'No'"></span>
+                                    <span :class="candidate?.offer_accepted ? 'text-green-600' : 'text-gray-400'" x-text="candidate?.offer_accepted ? 'Yes' : 'No'"></span>
                                 </div>
                             </div>
                         </div>
@@ -308,19 +308,19 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Training Accepted</span>
-                                    <span :class="candidate.training_accepted ? 'text-green-600' : 'text-gray-400'" x-text="candidate.training_accepted ? 'Yes' : 'No'"></span>
+                                    <span :class="candidate?.training_accepted ? 'text-green-600' : 'text-gray-400'" x-text="candidate?.training_accepted ? 'Yes' : 'No'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Training Status</span>
-                                    <span class="text-gray-800" x-text="candidate.training_status || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.training_status || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Start Date</span>
-                                    <span class="text-gray-800" x-text="formatDate(candidate.training_start_date) || '-'"></span>
+                                    <span class="text-gray-800" x-text="formatDate(candidate?.training_start_date) || '-'"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Alfa One Onboarded</span>
-                                    <span :class="candidate.alfa_one_onboarded ? 'text-green-600' : 'text-gray-400'" x-text="candidate.alfa_one_onboarded ? 'Yes' : 'No'"></span>
+                                    <span :class="candidate?.alfa_one_onboarded ? 'text-green-600' : 'text-gray-400'" x-text="candidate?.alfa_one_onboarded ? 'Yes' : 'No'"></span>
                                 </div>
                             </div>
                         </div>
@@ -336,19 +336,19 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Created in Zoho</span>
-                                    <span class="text-gray-800" x-text="formatDate(candidate.zoho_created_time) || '-'"></span>
+                                    <span class="text-gray-800" x-text="formatDate(candidate?.zoho_created_time) || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Last Activity</span>
-                                    <span class="text-gray-800" x-text="formatDate(candidate.last_activity_date) || '-'"></span>
+                                    <span class="text-gray-800" x-text="formatDate(candidate?.last_activity_date) || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Last Communication</span>
-                                    <span class="text-gray-800" x-text="formatDate(candidate.last_communication_date) || '-'"></span>
+                                    <span class="text-gray-800" x-text="formatDate(candidate?.last_communication_date) || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Next Follow-up</span>
-                                    <span class="text-gray-800" x-text="formatDate(candidate.next_followup) || '-'"></span>
+                                    <span class="text-gray-800" x-text="formatDate(candidate?.next_followup) || '-'"></span>
                                 </div>
                             </div>
                         </div>
@@ -364,15 +364,15 @@
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Source</span>
-                                    <span class="text-gray-800" x-text="candidate.candidate_source || '-'"></span>
+                                    <span class="text-gray-800" x-text="candidate?.candidate_source || '-'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-500">Zoho ID</span>
-                                    <span class="text-gray-800 font-mono text-xs" x-text="candidate.zoho_id"></span>
+                                    <span class="text-gray-800 font-mono text-xs" x-text="candidate?.zoho_id"></span>
                                 </div>
-                                <div x-show="candidate.disqualification_reason">
+                                <div x-show="candidate?.disqualification_reason">
                                     <span class="text-gray-500 block mb-1">Disqualification Reason</span>
-                                    <span class="text-red-600" x-text="candidate.disqualification_reason"></span>
+                                    <span class="text-red-600" x-text="candidate?.disqualification_reason"></span>
                                 </div>
                             </div>
                         </div>
@@ -402,7 +402,7 @@
                             </select>
                             <button
                                 @click="moveStage()"
-                                :disabled="!newStage || newStage === candidate.stage"
+                                :disabled="!newStage || newStage === candidate?.stage"
                                 class="mt-2 w-full px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                             >
                                 Update Stage
@@ -417,11 +417,11 @@
                         <!-- Interviews -->
                         <div>
                             <h3 class="font-semibold text-gray-800 mb-3">Interviews</h3>
-                            <div x-show="candidate.interviews?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
+                            <div x-show="candidate?.interviews?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
                                 No interviews scheduled
                             </div>
                             <div class="space-y-3">
-                                <template x-for="interview in candidate.interviews" :key="interview.id">
+                                <template x-for="interview in (candidate?.interviews || [])" :key="interview.id">
                                     <div class="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
                                         <div>
                                             <p class="font-medium text-gray-800" x-text="interview.interview_type"></p>
@@ -449,11 +449,11 @@
                         <!-- Tasks -->
                         <div class="mt-6">
                             <h3 class="font-semibold text-gray-800 mb-3">Tasks</h3>
-                            <div x-show="candidate.tasks?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
+                            <div x-show="candidate?.tasks?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
                                 No tasks assigned
                             </div>
                             <div class="space-y-3">
-                                <template x-for="task in candidate.tasks" :key="task.id">
+                                <template x-for="task in (candidate?.tasks || [])" :key="task.id">
                                     <div class="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
                                         <div>
                                             <p class="font-medium text-gray-800" x-text="task.title"></p>
@@ -521,10 +521,10 @@
                     </div>
 
                     <!-- Platform Notes List -->
-                    <div x-show="candidate.notes?.length > 0" class="mb-6">
+                    <div x-show="candidate?.notes?.length > 0" class="mb-6">
                         <h3 class="font-semibold text-gray-800 mb-3">Platform Notes</h3>
                         <div class="space-y-4">
-                            <template x-for="note in candidate.notes" :key="note.id">
+                            <template x-for="note in (candidate?.notes || [])" :key="note.id">
                                 <div class="bg-gray-50 rounded-lg p-4">
                                     <div class="flex items-start justify-between mb-2">
                                         <div class="flex items-center gap-2">
@@ -559,14 +559,14 @@
                     </div>
 
                     <!-- CRM Notes (synced from Zoho) - Combined Summary View -->
-                    <div x-show="candidate.crm_notes?.length > 0">
+                    <div x-show="candidate?.crm_notes?.length > 0">
                         <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
                             <div class="flex items-center justify-between mb-3">
                                 <div class="flex items-center gap-2">
                                     <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">CRM Notes</span>
-                                    <span class="text-sm text-gray-600" x-text="candidate.crm_notes?.length + ' note' + (candidate.crm_notes?.length !== 1 ? 's' : '')"></span>
+                                    <span class="text-sm text-gray-600" x-text="candidate?.crm_notes?.length + ' note' + (candidate?.crm_notes?.length !== 1 ? 's' : '')"></span>
                                 </div>
-                                <span class="text-xs text-gray-500" x-text="'Latest: ' + formatDateTime(candidate.crm_notes?.[0]?.zoho_created_time)"></span>
+                                <span class="text-xs text-gray-500" x-text="'Latest: ' + formatDateTime(candidate?.crm_notes?.[0]?.zoho_created_time)"></span>
                             </div>
 
                             <!-- Combined Summary of all notes -->
@@ -588,7 +588,7 @@
                                     View all notes
                                 </summary>
                                 <div class="mt-3 space-y-3 max-h-96 overflow-y-auto">
-                                    <template x-for="note in candidate.crm_notes" :key="note.id">
+                                    <template x-for="note in (candidate?.crm_notes || [])" :key="note.id">
                                         <div class="bg-white rounded p-3 border border-gray-200">
                                             <div class="flex items-center gap-2 mb-2">
                                                 <span x-show="note.title" class="text-sm font-medium text-gray-700" x-text="note.title"></span>
@@ -604,7 +604,7 @@
                     </div>
 
                     <!-- Empty State -->
-                    <div x-show="candidate.notes?.length === 0 && candidate.crm_notes?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
+                    <div x-show="candidate?.notes?.length === 0 && candidate.crm_notes?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
                         No notes yet. Add one above.
                     </div>
                 </div>
@@ -1087,7 +1087,7 @@ function candidateDetailApp() {
         },
 
         async moveStage() {
-            if (!this.newStage || this.newStage === this.candidate.stage) return;
+            if (!this.newStage || this.newStage === this.candidate?.stage) return;
 
             try {
                 const response = await fetch(
@@ -1096,7 +1096,7 @@ function candidateDetailApp() {
                 );
 
                 if (response.ok) {
-                    this.candidate.stage = this.newStage;
+                    this.candidate?.stage = this.newStage;
                     this.candidate.days_in_stage = 0;
                     this.newStage = '';
                 }
