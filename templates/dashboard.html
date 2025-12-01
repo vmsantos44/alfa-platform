@@ -18,18 +18,52 @@
     <!-- Dashboard Content -->
     <div x-show="!loading" x-cloak>
 
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- Filter Bar -->
+        <div class="bg-white rounded-lg shadow-sm p-3 mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <!-- Owner Filter -->
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 whitespace-nowrap">Candidate Owner:</label>
+                    <select
+                        x-model="selectedOwner"
+                        @change="applyOwnerFilter()"
+                        class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-alfa-blue focus:border-alfa-blue"
+                    >
+                        <option value="">All Team Members</option>
+                        <template x-for="owner in owners" :key="owner">
+                            <option :value="owner" x-text="owner"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- Quick Toggle: My Candidates -->
+                <button
+                    @click="toggleMyView()"
+                    class="text-sm px-3 py-1.5 rounded-lg border transition-colors"
+                    :class="isMyView ? 'bg-alfa-blue text-white border-alfa-blue' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'"
+                >
+                    <span x-text="isMyView ? 'Showing: Mine' : 'Show: My Candidates'"></span>
+                </button>
+            </div>
+
+            <!-- Last Sync Info -->
+            <div class="flex items-center gap-2 text-xs text-gray-500">
+                <span x-show="lastRefresh" x-text="'Last updated: ' + formatRelativeTime(lastRefresh)"></span>
+                <button @click="refreshAll()" class="text-alfa-blue hover:underline">Refresh</button>
+            </div>
+        </div>
+
+        <!-- Stats Row - Compact 4-column grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <!-- Needs Action -->
-            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-500">
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-red-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500 uppercase tracking-wide">Needs Action</p>
-                        <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.needs_action_count">0</p>
-                        <p class="text-sm text-red-600 mt-1">Requires follow-up</p>
+                        <p class="text-xs text-gray-500 uppercase">Needs Action</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.needs_action_count">0</p>
                     </div>
-                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                         </svg>
                     </div>
@@ -37,31 +71,44 @@
             </div>
 
             <!-- Scheduled Today -->
-            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-500">
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500 uppercase tracking-wide">Scheduled Today</p>
-                        <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.scheduled_today_count">0</p>
-                        <p class="text-sm text-yellow-600 mt-1">Interviews</p>
+                        <p class="text-xs text-gray-500 uppercase">Today's Interviews</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.scheduled_today_count">0</p>
                     </div>
-                    <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                         </svg>
                     </div>
                 </div>
             </div>
 
-            <!-- Active Interpreters -->
-            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+            <!-- In Pipeline -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-amber-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500 uppercase tracking-wide">Active Interpreters</p>
-                        <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.active_interpreters_count">0</p>
-                        <p class="text-sm text-green-600 mt-1">Ready for assignments</p>
+                        <p class="text-xs text-gray-500 uppercase">In Pipeline</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.in_pipeline_count">0</p>
                     </div>
-                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Interpreters -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">Active</p>
+                        <p class="text-2xl font-bold text-gray-800" x-text="filteredStats.active_interpreters_count">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     </div>
@@ -69,400 +116,266 @@
             </div>
         </div>
 
-        <!-- System Alerts Section -->
-        <div class="bg-white rounded-xl shadow-sm mb-6">
-            <div class="p-4 border-b flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                    <h2 class="text-lg font-semibold text-gray-800">SYSTEM ALERTS</h2>
-                    <span x-show="alertCounts.total > 0" class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full" x-text="alertCounts.total + ' alerts'"></span>
-                </div>
-                <button @click="fetchSystemAlerts()" class="text-sm text-alfa-blue hover:underline">Refresh</button>
-            </div>
+        <!-- Two Column Layout: Alerts + Tasks side by side -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-            <div class="p-4">
-                <!-- Loading State -->
-                <div x-show="systemAlertsLoading" class="text-center py-6 text-gray-400">
-                    <svg class="animate-spin h-6 w-6 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                </div>
-
-                <!-- Empty State -->
-                <div x-show="!systemAlertsLoading && systemAlerts.length === 0" class="text-center py-6 text-gray-500">
-                    <svg class="w-10 h-10 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <p class="text-sm">No system alerts</p>
-                </div>
-
-                <!-- Alert Categories -->
-                <div x-show="!systemAlertsLoading && systemAlerts.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-                    <!-- Upcoming Interviews -->
-                    <div class="bg-blue-50 rounded-lg p-3 cursor-pointer hover:bg-blue-100 transition-colors"
-                         @click="filterAlertCategory('upcoming_interviews')"
-                         :class="{'ring-2 ring-blue-500': alertFilter === 'upcoming_interviews'}">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
-                            <span class="text-sm font-medium text-blue-800">Today's Interviews</span>
-                        </div>
-                        <p class="text-2xl font-bold text-blue-700 mt-1" x-text="alertCounts.today_interviews || 0"></p>
-                    </div>
-
-                    <!-- No-Shows -->
-                    <div class="bg-red-50 rounded-lg p-3 cursor-pointer hover:bg-red-100 transition-colors"
-                         @click="filterAlertCategory('no_shows')"
-                         :class="{'ring-2 ring-red-500': alertFilter === 'no_shows'}">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                            </svg>
-                            <span class="text-sm font-medium text-red-800">No-Shows</span>
-                        </div>
-                        <p class="text-2xl font-bold text-red-700 mt-1" x-text="alertCounts.no_shows || 0"></p>
-                    </div>
-
-                    <!-- Stuck Candidates -->
-                    <div class="bg-amber-50 rounded-lg p-3 cursor-pointer hover:bg-amber-100 transition-colors"
-                         @click="filterAlertCategory('stuck_candidates')"
-                         :class="{'ring-2 ring-amber-500': alertFilter === 'stuck_candidates'}">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            <span class="text-sm font-medium text-amber-800">Stuck</span>
-                        </div>
-                        <p class="text-2xl font-bold text-amber-700 mt-1" x-text="alertCounts.stuck_candidates || 0"></p>
-                    </div>
-
-                    <!-- Overdue Assessments -->
-                    <div class="bg-purple-50 rounded-lg p-3 cursor-pointer hover:bg-purple-100 transition-colors"
-                         @click="filterAlertCategory('overdue_assessments')"
-                         :class="{'ring-2 ring-purple-500': alertFilter === 'overdue_assessments'}">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                            </svg>
-                            <span class="text-sm font-medium text-purple-800">Assessments</span>
-                        </div>
-                        <p class="text-2xl font-bold text-purple-700 mt-1" x-text="alertCounts.overdue_assessments || 0"></p>
-                    </div>
-
-                    <!-- Pending Documents -->
-                    <div class="bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                         @click="filterAlertCategory('pending_documents')"
-                         :class="{'ring-2 ring-gray-500': alertFilter === 'pending_documents'}">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <span class="text-sm font-medium text-gray-800">Documents</span>
-                        </div>
-                        <p class="text-2xl font-bold text-gray-700 mt-1" x-text="alertCounts.pending_documents || 0"></p>
+            <!-- System Alerts (Compact) -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        <h2 class="text-sm font-semibold text-gray-800">SYSTEM ALERTS</h2>
+                        <span x-show="filteredAlertCounts.total > 0" class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" x-text="filteredAlertCounts.total"></span>
                     </div>
                 </div>
 
-                <!-- Filtered Alert List -->
-                <div x-show="!systemAlertsLoading && filteredAlerts.length > 0" class="max-h-[300px] overflow-y-auto">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm text-gray-500" x-text="getAlertCategoryLabel(alertFilter)"></span>
-                        <button x-show="alertFilter" @click="alertFilter = null" class="text-xs text-gray-500 hover:text-gray-700">Clear filter</button>
-                    </div>
-                    <ul class="space-y-2">
-                        <template x-for="alert in filteredAlerts" :key="alert.id">
-                            <li class="flex items-center justify-between p-3 rounded-lg border"
-                                :class="{
-                                    'bg-red-50 border-red-200': alert.priority === 'high',
-                                    'bg-amber-50 border-amber-200': alert.priority === 'medium',
-                                    'bg-gray-50 border-gray-200': alert.priority === 'low'
-                                }">
-                                <div class="flex items-center gap-3 flex-1 min-w-0">
-                                    <div class="w-2 h-2 rounded-full"
-                                         :class="{
-                                             'bg-red-500': alert.priority === 'high',
-                                             'bg-amber-500': alert.priority === 'medium',
-                                             'bg-gray-400': alert.priority === 'low'
-                                         }"></div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="font-medium text-gray-800 truncate" x-text="alert.title"></p>
-                                        <p class="text-sm text-gray-500 truncate" x-text="alert.description"></p>
-                                    </div>
-                                </div>
-                                <a x-show="alert.action_url"
-                                   :href="alert.action_url"
-                                   class="ml-2 px-3 py-1 text-sm bg-white border rounded hover:bg-gray-50 transition-colors whitespace-nowrap"
-                                   x-text="alert.action_label || 'View'"></a>
-                            </li>
-                        </template>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Required Section (Tasks) -->
-        <div class="bg-white rounded-xl shadow-sm mb-6">
-            <div class="p-4 border-b flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
-                    <h2 class="text-lg font-semibold text-gray-800">ZOHO TASKS</h2>
-                    <span x-show="actionSummary.urgent > 0" class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full" x-text="actionSummary.urgent + ' urgent'"></span>
-                </div>
-                <button
-                    @click="refreshActionItems()"
-                    class="text-sm text-alfa-blue hover:underline"
-                >
-                    Refresh
-                </button>
-            </div>
-
-            <div class="p-4">
-                <!-- Loading State -->
-                <div x-show="actionItemsLoading" class="text-center py-8 text-gray-400">
-                    <svg class="animate-spin h-8 w-8 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p class="text-sm mt-2">Loading tasks...</p>
-                </div>
-
-                <!-- Empty State -->
-                <div x-show="!actionItemsLoading && actionItems.length === 0" class="text-center py-8 text-gray-500">
-                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <p>No pending actions - you're all caught up!</p>
-                    <p class="text-xs mt-1">Tasks will appear here after syncing from Zoho</p>
-                </div>
-
-                <!-- Task List -->
-                <ul class="space-y-3 max-h-[400px] overflow-y-auto" x-show="!actionItemsLoading && actionItems.length > 0">
-                    <template x-for="task in actionItems" :key="task.id">
-                        <li
-                            class="flex items-start justify-between p-3 rounded-lg transition-colors"
-                            :class="{
-                                'bg-red-50 border border-red-200': task.is_overdue,
-                                'bg-amber-50 border border-amber-200': task.is_due_today && !task.is_overdue,
-                                'bg-gray-50 border border-gray-100': !task.is_overdue && !task.is_due_today
-                            }"
+                <div class="p-3">
+                    <!-- Compact Alert Category Pills -->
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <button
+                            @click="filterAlertCategory('upcoming_interviews')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'upcoming_interviews' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'"
                         >
-                            <div class="flex items-start gap-3 flex-1 min-w-0">
-                                <!-- Priority/Status Indicator -->
-                                <div class="flex flex-col items-center gap-1 pt-1">
-                                    <span
-                                        class="w-2 h-2 rounded-full"
-                                        :class="{
-                                            'bg-red-500': task.priority === 'high' || task.is_overdue,
-                                            'bg-amber-500': task.priority === 'medium' || task.is_due_today,
-                                            'bg-blue-500': task.priority === 'low'
-                                        }"
-                                    ></span>
-                                </div>
-
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <p class="font-medium text-gray-800" x-text="task.title"></p>
-                                        <span
-                                            x-show="task.is_overdue"
-                                            class="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium"
-                                        >OVERDUE</span>
-                                        <span
-                                            x-show="task.is_due_today && !task.is_overdue"
-                                            class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium"
-                                        >DUE TODAY</span>
-                                    </div>
-                                    <p x-show="task.candidate_name" class="text-sm text-gray-600 mt-0.5">
-                                        <span class="text-gray-400">Related:</span> <span x-text="task.candidate_name"></span>
-                                    </p>
-                                    <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                                        <span x-show="task.due_date" x-text="'Due: ' + formatTaskDate(task.due_date)"></span>
-                                        <span x-show="task.assigned_to" class="text-gray-400">•</span>
-                                        <span x-show="task.assigned_to" x-text="task.assigned_to"></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center gap-2 ml-2">
-                                <!-- Task Type Badge -->
-                                <span
-                                    class="text-xs px-2 py-1 rounded-full whitespace-nowrap"
-                                    :class="{
-                                        'bg-blue-100 text-blue-700': task.task_type === 'follow_up',
-                                        'bg-purple-100 text-purple-700': task.task_type === 'document_request',
-                                        'bg-green-100 text-green-700': task.task_type === 'assessment',
-                                        'bg-orange-100 text-orange-700': task.task_type === 'training',
-                                        'bg-gray-100 text-gray-700': task.task_type === 'general'
-                                    }"
-                                    x-text="formatTaskType(task.task_type)"
-                                ></span>
-
-                                <!-- Complete Button -->
-                                <button
-                                    @click="completeTask(task.id)"
-                                    class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Mark as completed"
-                                >
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </li>
-                    </template>
-                </ul>
-
-                <!-- Summary Footer -->
-                <div x-show="!actionItemsLoading && actionItems.length > 0" class="mt-4 pt-3 border-t flex items-center justify-between text-sm">
-                    <span class="text-gray-500">
-                        <span x-text="actionSummary.total"></span> open tasks
-                        <span x-show="actionSummary.overdue > 0" class="text-red-600 ml-2">(<span x-text="actionSummary.overdue"></span> overdue)</span>
-                    </span>
-                    <a href="#" class="text-alfa-blue hover:underline">View All Tasks</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts Row -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <!-- Pipeline Funnel Chart -->
-            <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-gray-800">PIPELINE FUNNEL</h2>
-                    <a href="/candidates" class="text-sm text-alfa-blue hover:underline">View All</a>
-                </div>
-                <div class="p-4">
-                    <canvas id="funnelChart" height="250"></canvas>
-                </div>
-            </div>
-
-            <!-- Candidates by Language Chart -->
-            <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-gray-800">TOP LANGUAGES</h2>
-                </div>
-                <div class="p-4">
-                    <canvas id="languageChart" height="250"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Second Charts Row -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <!-- Candidates by Tier -->
-            <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b">
-                    <h2 class="text-lg font-semibold text-gray-800">BY TIER</h2>
-                </div>
-                <div class="p-4">
-                    <canvas id="tierChart" height="200"></canvas>
-                </div>
-            </div>
-
-            <!-- Candidates by Owner -->
-            <div class="bg-white rounded-xl shadow-sm lg:col-span-2">
-                <div class="p-4 border-b">
-                    <h2 class="text-lg font-semibold text-gray-800">BY RECRUITMENT OWNER</h2>
-                </div>
-                <div class="p-4">
-                    <canvas id="ownerChart" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Two Column Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            <!-- Recent Activity Feed -->
-            <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-gray-800">RECENT ACTIVITY</h2>
-                    <button @click="fetchRecentActivity()" class="text-sm text-alfa-blue hover:underline">Refresh</button>
-                </div>
-
-                <div class="p-4">
-                    <div x-show="recentActivity.length === 0" class="text-center py-8 text-gray-500">
-                        <p>No recent activity</p>
+                            <span>Interviews</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.today_interviews || 0"></span>
+                        </button>
+                        <button
+                            @click="filterAlertCategory('no_shows')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'no_shows' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'"
+                        >
+                            <span>No-Shows</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.no_shows || 0"></span>
+                        </button>
+                        <button
+                            @click="filterAlertCategory('stuck_candidates')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'stuck_candidates' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'"
+                        >
+                            <span>Stuck</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.stuck_candidates || 0"></span>
+                        </button>
+                        <button
+                            @click="filterAlertCategory('overdue_assessments')"
+                            class="text-xs px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                            :class="alertFilter === 'overdue_assessments' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'"
+                        >
+                            <span>Assessments</span>
+                            <span class="font-bold" x-text="filteredAlertCounts.overdue_assessments || 0"></span>
+                        </button>
+                        <button
+                            x-show="alertFilter"
+                            @click="alertFilter = null"
+                            class="text-xs px-2 py-1 text-gray-500 hover:text-gray-700"
+                        >Clear</button>
                     </div>
 
-                    <ul class="space-y-3" x-show="recentActivity.length > 0">
-                        <template x-for="item in recentActivity" :key="item.id">
-                            <li class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
-                                <div class="w-10 h-10 rounded-full bg-alfa-blue/10 flex items-center justify-center text-alfa-blue font-semibold" x-text="item.name.charAt(0)"></div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="font-medium text-gray-800 truncate" x-text="item.name"></p>
-                                    <div class="flex items-center gap-2 text-sm text-gray-500">
-                                        <span class="px-2 py-0.5 rounded text-xs" :class="getStageBadgeColor(item.stage)" x-text="item.stage"></span>
-                                        <span x-show="item.language" x-text="item.language"></span>
+                    <!-- Alert List (Compact) -->
+                    <div class="max-h-[250px] overflow-y-auto">
+                        <div x-show="systemAlertsLoading" class="text-center py-4 text-gray-400">
+                            <svg class="animate-spin h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!systemAlertsLoading && filteredAlerts.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                            No alerts
+                        </div>
+                        <ul class="space-y-1" x-show="!systemAlertsLoading && filteredAlerts.length > 0">
+                            <template x-for="alert in filteredAlerts.slice(0, 8)" :key="alert.id">
+                                <li class="flex items-center justify-between p-2 rounded border text-sm"
+                                    :class="{
+                                        'bg-red-50 border-red-200': alert.priority === 'high',
+                                        'bg-amber-50 border-amber-200': alert.priority === 'medium',
+                                        'bg-gray-50 border-gray-200': alert.priority === 'low'
+                                    }">
+                                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                                        <div class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                             :class="{
+                                                 'bg-red-500': alert.priority === 'high',
+                                                 'bg-amber-500': alert.priority === 'medium',
+                                                 'bg-gray-400': alert.priority === 'low'
+                                             }"></div>
+                                        <span class="truncate" x-text="alert.title"></span>
                                     </div>
+                                    <a x-show="alert.action_url" :href="alert.action_url"
+                                       class="text-xs text-alfa-blue hover:underline ml-2 flex-shrink-0">View</a>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zoho Tasks (Compact) -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        <h2 class="text-sm font-semibold text-gray-800">TASKS</h2>
+                        <span x-show="filteredActionSummary.total > 0" class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full" x-text="filteredActionSummary.total"></span>
+                        <span x-show="filteredActionSummary.overdue > 0" class="text-xs bg-red-600 text-white px-1.5 py-0.5 rounded-full" x-text="filteredActionSummary.overdue + ' overdue'"></span>
+                    </div>
+                </div>
+
+                <div class="p-3">
+                    <div class="max-h-[250px] overflow-y-auto">
+                        <div x-show="actionItemsLoading" class="text-center py-4 text-gray-400">
+                            <svg class="animate-spin h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!actionItemsLoading && filteredActionItems.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                            No pending tasks
+                        </div>
+                        <ul class="space-y-1" x-show="!actionItemsLoading && filteredActionItems.length > 0">
+                            <template x-for="task in filteredActionItems.slice(0, 8)" :key="task.id">
+                                <li class="flex items-center justify-between p-2 rounded border text-sm"
+                                    :class="{
+                                        'bg-red-50 border-red-200': task.is_overdue,
+                                        'bg-amber-50 border-amber-200': task.is_due_today && !task.is_overdue,
+                                        'bg-gray-50 border-gray-100': !task.is_overdue && !task.is_due_today
+                                    }">
+                                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                                        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              :class="{
+                                                  'bg-red-500': task.is_overdue || task.priority === 'high',
+                                                  'bg-amber-500': task.is_due_today || task.priority === 'medium',
+                                                  'bg-blue-500': task.priority === 'low'
+                                              }"></span>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="truncate font-medium" x-text="task.title"></p>
+                                            <p class="text-xs text-gray-500 truncate" x-show="task.candidate_name" x-text="task.candidate_name"></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1 ml-2 flex-shrink-0">
+                                        <span class="text-xs text-gray-500" x-text="formatTaskDate(task.due_date)"></span>
+                                        <button @click="completeTask(task.id)" class="p-1 text-gray-400 hover:text-green-600">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row - Funnel + Languages side by side -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-gray-800">PIPELINE</h2>
+                    <a href="/candidates" class="text-xs text-alfa-blue hover:underline">View All</a>
+                </div>
+                <div class="p-3">
+                    <canvas id="funnelChart" height="180"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b">
+                    <h2 class="text-sm font-semibold text-gray-800">LANGUAGES</h2>
+                </div>
+                <div class="p-3">
+                    <canvas id="languageChart" height="180"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Three Column: Tier + Owner Chart + Recent Activity -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <!-- By Tier -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b">
+                    <h2 class="text-sm font-semibold text-gray-800">BY TIER</h2>
+                </div>
+                <div class="p-3">
+                    <canvas id="tierChart" height="150"></canvas>
+                </div>
+            </div>
+
+            <!-- By Owner -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b">
+                    <h2 class="text-sm font-semibold text-gray-800">BY OWNER</h2>
+                </div>
+                <div class="p-3">
+                    <canvas id="ownerChart" height="150"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="p-3 border-b flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-gray-800">RECENT ACTIVITY</h2>
+                </div>
+                <div class="p-3 max-h-[200px] overflow-y-auto">
+                    <div x-show="filteredRecentActivity.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                        No recent activity
+                    </div>
+                    <ul class="space-y-2" x-show="filteredRecentActivity.length > 0">
+                        <template x-for="item in filteredRecentActivity.slice(0, 5)" :key="item.id">
+                            <li class="flex items-center gap-2 text-sm">
+                                <div class="w-7 h-7 rounded-full bg-alfa-blue/10 flex items-center justify-center text-alfa-blue text-xs font-semibold flex-shrink-0" x-text="item.name.charAt(0)"></div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="truncate font-medium text-gray-800" x-text="item.name"></p>
+                                    <span class="text-xs px-1.5 py-0.5 rounded" :class="getStageBadgeColor(item.stage)" x-text="item.stage"></span>
                                 </div>
-                                <div class="text-xs text-gray-400" x-text="formatRelativeTime(item.activity_date)"></div>
+                                <span class="text-xs text-gray-400 flex-shrink-0" x-text="formatRelativeTime(item.activity_date)"></span>
                             </li>
                         </template>
                     </ul>
                 </div>
             </div>
+        </div>
 
-            <!-- Pipeline Overview (Bar version) -->
-            <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-gray-800">PIPELINE OVERVIEW</h2>
-                    <a href="/candidates" class="text-sm text-alfa-blue hover:underline">View All</a>
-                </div>
-
-                <div class="p-4">
-                    <div class="space-y-3">
-                        <template x-for="stage in pipeline" :key="stage.stage">
-                            <div class="flex items-center gap-4">
-                                <span class="text-sm text-gray-600 w-32 truncate" x-text="stage.stage"></span>
-                                <div class="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                                    <div
-                                        class="h-full rounded-full transition-all duration-500"
-                                        :class="getPipelineColor(stage.stage)"
-                                        :style="'width: ' + Math.min((stage.count / maxPipelineCount) * 100, 100) + '%'"
-                                    ></div>
-                                </div>
-                                <span class="text-sm font-medium text-gray-800 w-12 text-right" x-text="stage.count"></span>
-                            </div>
-                        </template>
-                    </div>
+        <!-- Pipeline Overview Bar -->
+        <div class="bg-white rounded-lg shadow-sm mb-4">
+            <div class="p-3 border-b flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-gray-800">PIPELINE BREAKDOWN</h2>
+                <span class="text-xs text-gray-500" x-text="'Total: ' + filteredStats.total_candidates"></span>
+            </div>
+            <div class="p-3">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                    <template x-for="stage in filteredPipeline" :key="stage.stage">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold" :class="getPipelineTextColor(stage.stage)" x-text="stage.count"></div>
+                            <div class="text-xs text-gray-500 truncate" x-text="stage.stage"></div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
 
         <!-- Quick Actions -->
-        <div class="mt-6 flex flex-wrap gap-3">
-            <a href="/candidates?search=" class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border">
-                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex flex-wrap gap-2">
+            <a href="/candidates" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white rounded-lg shadow-sm hover:shadow-md border">
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <span>Search Candidate</span>
+                <span>Search</span>
             </a>
-
-            <button class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border">
-                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="/scheduling" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white rounded-lg shadow-sm hover:shadow-md border">
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
-                <span>Schedule Interview</span>
-            </button>
-
-            <button class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border">
-                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                </svg>
-                <span>Send Reminder</span>
-            </button>
-
-            <a href="/chat" class="inline-flex items-center gap-2 px-4 py-2 bg-alfa-blue text-white rounded-lg shadow-sm hover:bg-blue-700 transition-colors">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span>Schedule</span>
+            </a>
+            <a href="/chat" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-alfa-blue text-white rounded-lg shadow-sm hover:bg-blue-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                 </svg>
-                <span>Open Chat</span>
+                <span>Chat</span>
             </a>
         </div>
 
@@ -476,132 +389,297 @@
 function dashboardApp() {
     return {
         loading: true,
-        stats: {
+        lastRefresh: null,
+
+        // Owner filter
+        selectedOwner: '',
+        owners: [],
+        isMyView: false,
+        currentUser: null, // Will be set from localStorage or detected
+
+        // Raw data (unfiltered) - stored for client-side filtering
+        rawCandidates: [],
+        rawPipeline: [],
+        rawRecentActivity: [],
+        rawSystemAlerts: [],
+        rawActionItems: [],
+
+        // Filtered data (computed based on selectedOwner)
+        filteredStats: {
             needs_action_count: 0,
             scheduled_today_count: 0,
             active_interpreters_count: 0,
-            total_candidates: 0,
-            new_leads: 0,
-            screening: 0,
-            interview: 0,
-            assessment: 0,
-            onboarding: 0,
-            active: 0
+            in_pipeline_count: 0,
+            total_candidates: 0
         },
-        alerts: [],
-        actionItems: [],
-        actionItemsLoading: false,
-        actionSummary: { total: 0, overdue: 0, due_today: 0, urgent: 0 },
-        systemAlerts: [],
+        filteredPipeline: [],
+        filteredRecentActivity: [],
+        filteredAlertCounts: { total: 0, no_shows: 0, today_interviews: 0, stuck_candidates: 0, pending_documents: 0, overdue_assessments: 0 },
+        filteredActionSummary: { total: 0, overdue: 0, due_today: 0 },
+
+        // UI state
         systemAlertsLoading: false,
-        alertCounts: { total: 0, no_shows: 0, today_interviews: 0, stuck_candidates: 0, pending_documents: 0, overdue_assessments: 0 },
+        actionItemsLoading: false,
         alertFilter: null,
-        schedule: [],
-        pipeline: [],
-        recentActivity: [],
-        maxPipelineCount: 1,
         charts: {},
 
         async init() {
-            await this.fetchDashboard();
-            await this.fetchSystemAlerts();
-            await this.fetchActionItems();
+            // Load saved filter from localStorage
+            const savedOwner = localStorage.getItem('dashboard_owner_filter');
+            if (savedOwner) {
+                this.selectedOwner = savedOwner;
+                this.isMyView = true;
+            }
+
+            // Fetch all data
+            await Promise.all([
+                this.fetchCandidates(),
+                this.fetchSystemAlerts(),
+                this.fetchActionItems(),
+                this.fetchRecentActivity()
+            ]);
+
+            // Apply initial filter
+            this.applyOwnerFilter();
+
+            // Render charts
             await this.fetchChartData();
-            await this.fetchRecentActivity();
+
+            this.lastRefresh = new Date().toISOString();
             this.loading = false;
         },
 
-        async fetchActionItems() {
-            this.actionItemsLoading = true;
+        async fetchCandidates() {
             try {
-                const response = await fetch('/api/tasks/action-required?limit=15');
+                // Fetch candidates list to get owners and pipeline data
+                const response = await fetch('/api/candidates/?limit=5000');
                 const data = await response.json();
-                this.actionItems = data.items || [];
-                this.actionSummary = data.summary || { total: 0, overdue: 0, due_today: 0, urgent: 0 };
-                this.actionSummary.urgent = (this.actionSummary.overdue || 0) + (this.actionSummary.due_today || 0);
-            } catch (error) {
-                console.error('Failed to fetch action items:', error);
-                this.actionItems = [];
-            } finally {
-                this.actionItemsLoading = false;
-            }
-        },
+                this.rawCandidates = data.candidates || data || [];
 
-        async refreshActionItems() {
-            await this.fetchActionItems();
+                // Extract unique owners
+                const ownerSet = new Set();
+                this.rawCandidates.forEach(c => {
+                    if (c.candidate_owner) ownerSet.add(c.candidate_owner);
+                });
+                this.owners = Array.from(ownerSet).sort();
+
+            } catch (error) {
+                console.error('Failed to fetch candidates:', error);
+                this.rawCandidates = [];
+            }
         },
 
         async fetchSystemAlerts() {
             this.systemAlertsLoading = true;
             try {
-                const [alertsRes, countsRes] = await Promise.all([
-                    fetch('/api/alerts/'),
-                    fetch('/api/alerts/counts')
-                ]);
-                const alertsData = await alertsRes.json();
-                const countsData = await countsRes.json();
+                const response = await fetch('/api/alerts/');
+                const alertsData = await response.json();
 
-                // Flatten all alerts into a single array with category info
-                this.systemAlerts = [];
+                // Flatten all alerts
+                this.rawSystemAlerts = [];
                 if (alertsData.alerts) {
                     for (const [category, items] of Object.entries(alertsData.alerts)) {
                         for (const item of items) {
-                            this.systemAlerts.push({ ...item, category });
+                            this.rawSystemAlerts.push({ ...item, category });
                         }
                     }
                 }
-
-                // Update counts - map from API response
-                this.alertCounts = {
-                    total: countsData.total || 0,
-                    no_shows: countsData.no_shows || 0,
-                    today_interviews: countsData.today_interviews || 0,
-                    stuck_candidates: countsData.stuck_candidates || 0,
-                    pending_documents: countsData.pending_documents || 0,
-                    overdue_assessments: alertsData.summary?.overdue_assessments || 0
-                };
-
-                // Update needs_action stat
-                this.stats.needs_action_count = this.alertCounts.total;
-
             } catch (error) {
                 console.error('Failed to fetch system alerts:', error);
-                this.systemAlerts = [];
+                this.rawSystemAlerts = [];
             } finally {
                 this.systemAlertsLoading = false;
             }
         },
 
-        filterAlertCategory(category) {
-            if (this.alertFilter === category) {
-                this.alertFilter = null;
-            } else {
-                this.alertFilter = category;
+        async fetchActionItems() {
+            this.actionItemsLoading = true;
+            try {
+                const response = await fetch('/api/tasks/action-required?limit=100');
+                const data = await response.json();
+                this.rawActionItems = data.items || [];
+            } catch (error) {
+                console.error('Failed to fetch action items:', error);
+                this.rawActionItems = [];
+            } finally {
+                this.actionItemsLoading = false;
             }
+        },
+
+        async fetchRecentActivity() {
+            try {
+                const response = await fetch('/api/dashboard/analytics/recent-activity?limit=50');
+                const data = await response.json();
+                this.rawRecentActivity = data.data || [];
+            } catch (error) {
+                console.error('Failed to fetch recent activity:', error);
+                this.rawRecentActivity = [];
+            }
+        },
+
+        applyOwnerFilter() {
+            // Save to localStorage
+            if (this.selectedOwner) {
+                localStorage.setItem('dashboard_owner_filter', this.selectedOwner);
+            } else {
+                localStorage.removeItem('dashboard_owner_filter');
+            }
+
+            // Filter candidates
+            const filtered = this.selectedOwner
+                ? this.rawCandidates.filter(c => c.candidate_owner === this.selectedOwner)
+                : this.rawCandidates;
+
+            // Calculate filtered stats
+            const activeStages = ['New Candidate', 'Screening', 'Interview Scheduled', 'Interview Completed', 'Assessment', 'Onboarding'];
+            const inPipeline = filtered.filter(c => activeStages.includes(c.stage)).length;
+            const active = filtered.filter(c => c.stage === 'Active').length;
+
+            this.filteredStats = {
+                needs_action_count: this.getFilteredAlertCount(),
+                scheduled_today_count: this.getFilteredTodayInterviewCount(),
+                in_pipeline_count: inPipeline,
+                active_interpreters_count: active,
+                total_candidates: filtered.length
+            };
+
+            // Calculate filtered pipeline
+            const pipelineMap = {};
+            filtered.forEach(c => {
+                pipelineMap[c.stage] = (pipelineMap[c.stage] || 0) + 1;
+            });
+            this.filteredPipeline = Object.entries(pipelineMap)
+                .map(([stage, count]) => ({ stage, count }))
+                .sort((a, b) => {
+                    const order = ['New Candidate', 'Screening', 'Interview Scheduled', 'Interview Completed', 'Assessment', 'Onboarding', 'Active', 'Inactive', 'Rejected'];
+                    return order.indexOf(a.stage) - order.indexOf(b.stage);
+                });
+
+            // Filter recent activity
+            this.filteredRecentActivity = this.selectedOwner
+                ? this.rawRecentActivity.filter(a => a.candidate_owner === this.selectedOwner)
+                : this.rawRecentActivity;
+
+            // Update alert counts (filtered by owner where applicable)
+            this.updateFilteredAlertCounts();
+
+            // Update action items summary
+            this.updateFilteredActionSummary();
+
+            // Re-render charts with filtered data
+            this.updateCharts();
+        },
+
+        getFilteredAlertCount() {
+            // For now, return total from raw alerts
+            // In a real implementation, you'd filter alerts by owner
+            return this.rawSystemAlerts.filter(a => {
+                if (!this.selectedOwner) return true;
+                // Check if alert is related to a candidate owned by selected owner
+                return !a.candidate_owner || a.candidate_owner === this.selectedOwner;
+            }).length;
+        },
+
+        getFilteredTodayInterviewCount() {
+            const today = new Date().toDateString();
+            return this.rawSystemAlerts.filter(a => {
+                if (a.category !== 'upcoming_interviews') return false;
+                if (!this.selectedOwner) return true;
+                return !a.candidate_owner || a.candidate_owner === this.selectedOwner;
+            }).length;
+        },
+
+        updateFilteredAlertCounts() {
+            const filtered = this.selectedOwner
+                ? this.rawSystemAlerts.filter(a => !a.candidate_owner || a.candidate_owner === this.selectedOwner)
+                : this.rawSystemAlerts;
+
+            this.filteredAlertCounts = {
+                total: filtered.length,
+                no_shows: filtered.filter(a => a.category === 'no_shows').length,
+                today_interviews: filtered.filter(a => a.category === 'upcoming_interviews').length,
+                stuck_candidates: filtered.filter(a => a.category === 'stuck_candidates').length,
+                overdue_assessments: filtered.filter(a => a.category === 'overdue_assessments').length,
+                pending_documents: filtered.filter(a => a.category === 'pending_documents').length
+            };
+        },
+
+        updateFilteredActionSummary() {
+            const filtered = this.selectedOwner
+                ? this.rawActionItems.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
+                : this.rawActionItems;
+
+            this.filteredActionSummary = {
+                total: filtered.length,
+                overdue: filtered.filter(t => t.is_overdue).length,
+                due_today: filtered.filter(t => t.is_due_today).length
+            };
         },
 
         get filteredAlerts() {
-            if (!this.alertFilter) {
-                // Show top 10 by priority when no filter
-                return this.systemAlerts
-                    .sort((a, b) => {
-                        const priority = { high: 0, medium: 1, low: 2 };
-                        return (priority[a.priority] || 1) - (priority[b.priority] || 1);
-                    })
-                    .slice(0, 10);
+            let alerts = this.selectedOwner
+                ? this.rawSystemAlerts.filter(a => !a.candidate_owner || a.candidate_owner === this.selectedOwner)
+                : this.rawSystemAlerts;
+
+            if (this.alertFilter) {
+                alerts = alerts.filter(a => a.category === this.alertFilter);
             }
-            return this.systemAlerts.filter(a => a.category === this.alertFilter);
+
+            return alerts.sort((a, b) => {
+                const priority = { high: 0, medium: 1, low: 2 };
+                return (priority[a.priority] || 1) - (priority[b.priority] || 1);
+            });
         },
 
-        getAlertCategoryLabel(filter) {
-            const labels = {
-                'no_shows': 'No-Shows Needing Follow-up',
-                'stuck_candidates': 'Candidates Stuck in Pipeline',
-                'upcoming_interviews': 'Upcoming Interviews',
-                'overdue_assessments': 'Overdue Language Assessments',
-                'pending_documents': 'Pending Document Reviews'
-            };
-            return labels[filter] || 'All Alerts';
+        get filteredActionItems() {
+            let items = this.selectedOwner
+                ? this.rawActionItems.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
+                : this.rawActionItems;
+
+            return items.sort((a, b) => {
+                if (a.is_overdue && !b.is_overdue) return -1;
+                if (!a.is_overdue && b.is_overdue) return 1;
+                return 0;
+            });
+        },
+
+        toggleMyView() {
+            if (this.isMyView) {
+                // Switch to All
+                this.selectedOwner = '';
+                this.isMyView = false;
+            } else {
+                // Switch to My view - use first owner or prompt user
+                if (this.owners.length > 0) {
+                    // Try to find current user from localStorage
+                    const savedUser = localStorage.getItem('dashboard_current_user');
+                    if (savedUser && this.owners.includes(savedUser)) {
+                        this.selectedOwner = savedUser;
+                    } else {
+                        this.selectedOwner = this.owners[0];
+                        localStorage.setItem('dashboard_current_user', this.selectedOwner);
+                    }
+                    this.isMyView = true;
+                }
+            }
+            this.applyOwnerFilter();
+        },
+
+        filterAlertCategory(category) {
+            this.alertFilter = this.alertFilter === category ? null : category;
+        },
+
+        async refreshAll() {
+            this.loading = true;
+            await Promise.all([
+                this.fetchCandidates(),
+                this.fetchSystemAlerts(),
+                this.fetchActionItems(),
+                this.fetchRecentActivity()
+            ]);
+            this.applyOwnerFilter();
+            this.lastRefresh = new Date().toISOString();
+            this.loading = false;
         },
 
         async completeTask(taskId) {
@@ -611,60 +689,16 @@ function dashboardApp() {
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (response.ok) {
-                    // Remove from list
-                    this.actionItems = this.actionItems.filter(t => t.id !== taskId);
-                    this.actionSummary.total = Math.max(0, this.actionSummary.total - 1);
+                    this.rawActionItems = this.rawActionItems.filter(t => t.id !== taskId);
+                    this.updateFilteredActionSummary();
                 }
             } catch (error) {
                 console.error('Failed to complete task:', error);
             }
         },
 
-        formatTaskDate(dateStr) {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            const today = new Date();
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            if (date.toDateString() === today.toDateString()) return 'Today';
-            if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        },
-
-        formatTaskType(type) {
-            const types = {
-                'follow_up': 'Follow Up',
-                'document_request': 'Documents',
-                'assessment': 'Assessment',
-                'training': 'Training',
-                'general': 'General'
-            };
-            return types[type] || type;
-        },
-
-        async fetchDashboard() {
-            try {
-                const response = await fetch('/api/dashboard/');
-                const data = await response.json();
-
-                this.stats = data.stats;
-                this.alerts = data.action_alerts;
-                this.schedule = data.today_schedule.interviews;
-                this.pipeline = data.pipeline;
-
-                // Calculate max for pipeline bars
-                this.maxPipelineCount = Math.max(...this.pipeline.map(s => s.count), 1);
-
-            } catch (error) {
-                console.error('Failed to fetch dashboard:', error);
-            }
-        },
-
         async fetchChartData() {
             try {
-                // Fetch all chart data in parallel
                 const [funnelRes, langRes, tierRes, ownerRes] = await Promise.all([
                     fetch('/api/dashboard/analytics/pipeline-funnel'),
                     fetch('/api/dashboard/analytics/by-language?limit=8'),
@@ -677,6 +711,8 @@ function dashboardApp() {
                 const tierData = await tierRes.json();
                 const ownerData = await ownerRes.json();
 
+                this.rawPipeline = funnelData.data;
+
                 this.renderFunnelChart(funnelData.data);
                 this.renderLanguageChart(langData.data);
                 this.renderTierChart(tierData.data);
@@ -687,52 +723,37 @@ function dashboardApp() {
             }
         },
 
-        async fetchRecentActivity() {
-            try {
-                const response = await fetch('/api/dashboard/analytics/recent-activity?limit=8');
-                const data = await response.json();
-                this.recentActivity = data.data;
-            } catch (error) {
-                console.error('Failed to fetch recent activity:', error);
+        updateCharts() {
+            // Re-render pipeline chart with filtered data if owner is selected
+            if (this.charts.funnel && this.filteredPipeline.length > 0) {
+                this.charts.funnel.data.labels = this.filteredPipeline.map(d => d.stage);
+                this.charts.funnel.data.datasets[0].data = this.filteredPipeline.map(d => d.count);
+                this.charts.funnel.update();
             }
         },
 
         renderFunnelChart(data) {
             const ctx = document.getElementById('funnelChart');
             if (!ctx) return;
+            if (this.charts.funnel) this.charts.funnel.destroy();
 
             const colors = [
-                'rgba(59, 130, 246, 0.8)',   // Blue
-                'rgba(234, 179, 8, 0.8)',    // Yellow
-                'rgba(249, 115, 22, 0.8)',   // Orange
-                'rgba(168, 85, 247, 0.8)',   // Purple
-                'rgba(236, 72, 153, 0.8)',   // Pink
-                'rgba(99, 102, 241, 0.8)',   // Indigo
-                'rgba(34, 197, 94, 0.8)'     // Green
+                'rgba(59, 130, 246, 0.8)', 'rgba(234, 179, 8, 0.8)', 'rgba(249, 115, 22, 0.8)',
+                'rgba(168, 85, 247, 0.8)', 'rgba(236, 72, 153, 0.8)', 'rgba(99, 102, 241, 0.8)', 'rgba(34, 197, 94, 0.8)'
             ];
 
             this.charts.funnel = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: data.map(d => d.stage),
-                    datasets: [{
-                        label: 'Candidates',
-                        data: data.map(d => d.count),
-                        backgroundColor: colors,
-                        borderRadius: 4
-                    }]
+                    datasets: [{ label: 'Candidates', data: data.map(d => d.count), backgroundColor: colors, borderRadius: 4 }]
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { display: false } }
-                    }
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: { display: false } }, y: { grid: { display: false } } }
                 }
             });
         },
@@ -740,36 +761,21 @@ function dashboardApp() {
         renderLanguageChart(data) {
             const ctx = document.getElementById('languageChart');
             if (!ctx) return;
+            if (this.charts.language) this.charts.language.destroy();
 
             const colors = [
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(34, 197, 94, 0.8)',
-                'rgba(234, 179, 8, 0.8)',
-                'rgba(249, 115, 22, 0.8)',
-                'rgba(168, 85, 247, 0.8)',
-                'rgba(236, 72, 153, 0.8)',
-                'rgba(99, 102, 241, 0.8)',
-                'rgba(107, 114, 128, 0.8)'
+                'rgba(59, 130, 246, 0.8)', 'rgba(34, 197, 94, 0.8)', 'rgba(234, 179, 8, 0.8)',
+                'rgba(249, 115, 22, 0.8)', 'rgba(168, 85, 247, 0.8)', 'rgba(236, 72, 153, 0.8)',
+                'rgba(99, 102, 241, 0.8)', 'rgba(107, 114, 128, 0.8)'
             ];
 
             this.charts.language = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
-                    labels: data.map(d => d.language),
-                    datasets: [{
-                        data: data.map(d => d.count),
-                        backgroundColor: colors
-                    }]
-                },
+                data: { labels: data.map(d => d.language), datasets: [{ data: data.map(d => d.count), backgroundColor: colors }] },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: { boxWidth: 12, padding: 8 }
-                        }
-                    }
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } } }
                 }
             });
         },
@@ -777,31 +783,20 @@ function dashboardApp() {
         renderTierChart(data) {
             const ctx = document.getElementById('tierChart');
             if (!ctx) return;
+            if (this.charts.tier) this.charts.tier.destroy();
 
-            const colors = {
-                'Tier 1': 'rgba(34, 197, 94, 0.8)',
-                'Tier 2': 'rgba(59, 130, 246, 0.8)',
-                'Tier 3': 'rgba(168, 85, 247, 0.8)'
-            };
+            const colors = { 'Tier 1': 'rgba(34, 197, 94, 0.8)', 'Tier 2': 'rgba(59, 130, 246, 0.8)', 'Tier 3': 'rgba(168, 85, 247, 0.8)' };
 
             this.charts.tier = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: data.map(d => d.tier),
-                    datasets: [{
-                        data: data.map(d => d.count),
-                        backgroundColor: data.map(d => colors[d.tier] || 'rgba(107, 114, 128, 0.8)')
-                    }]
+                    datasets: [{ data: data.map(d => d.count), backgroundColor: data.map(d => colors[d.tier] || 'rgba(107, 114, 128, 0.8)') }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { boxWidth: 12, padding: 8 }
-                        }
-                    }
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } } }
                 }
             });
         },
@@ -809,77 +804,32 @@ function dashboardApp() {
         renderOwnerChart(data) {
             const ctx = document.getElementById('ownerChart');
             if (!ctx) return;
+            if (this.charts.owner) this.charts.owner.destroy();
 
             this.charts.owner = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.map(d => d.owner.split(' ')[0]),  // First name only
-                    datasets: [{
-                        label: 'Candidates',
-                        data: data.map(d => d.count),
-                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                        borderRadius: 4
-                    }]
+                    labels: data.map(d => d.owner.split(' ')[0]),
+                    datasets: [{ label: 'Candidates', data: data.map(d => d.count), backgroundColor: 'rgba(59, 130, 246, 0.8)', borderRadius: 4 }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { display: false }, beginAtZero: true }
-                    }
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: { display: false } }, y: { grid: { display: false }, beginAtZero: true } }
                 }
             });
         },
 
-        async refreshAlerts() {
-            try {
-                const response = await fetch('/api/dashboard/alerts');
-                this.alerts = await response.json();
-            } catch (error) {
-                console.error('Failed to refresh alerts:', error);
-            }
-        },
-
-        async resolveAlert(alertId) {
-            try {
-                const response = await fetch(`/api/dashboard/alerts/${alertId}/resolve`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resolved_by: 'Victor' })
-                });
-
-                if (response.ok) {
-                    this.alerts = this.alerts.filter(a => a.id !== alertId);
-                    this.stats.needs_action_count--;
-                }
-            } catch (error) {
-                console.error('Failed to resolve alert:', error);
-            }
-        },
-
-        async markNoShow(interviewId) {
-            if (!confirm('Mark this interview as a no-show?')) return;
-
-            try {
-                console.log('Mark no-show:', interviewId);
-                alert('No-show marked (API coming soon)');
-            } catch (error) {
-                console.error('Failed to mark no-show:', error);
-            }
-        },
-
-        formatTime(dateStr) {
-            if (!dateStr) return '-';
+        formatTaskDate(dateStr) {
+            if (!dateStr) return '';
             const date = new Date(dateStr);
-            return date.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            });
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            if (date.toDateString() === today.toDateString()) return 'Today';
+            if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         },
 
         formatRelativeTime(dateStr) {
@@ -890,36 +840,26 @@ function dashboardApp() {
             const diffMins = Math.floor(diffMs / 60000);
             const diffHours = Math.floor(diffMs / 3600000);
             const diffDays = Math.floor(diffMs / 86400000);
-
+            if (diffMins < 1) return 'just now';
             if (diffMins < 60) return `${diffMins}m ago`;
             if (diffHours < 24) return `${diffHours}h ago`;
             if (diffDays < 7) return `${diffDays}d ago`;
             return date.toLocaleDateString();
         },
 
-        formatAlertType(type) {
-            const types = {
-                'no_show': 'No Show',
-                'stuck_pipeline': 'Stuck',
-                'overdue_task': 'Overdue',
-                'expired_document': 'Expired Doc',
-                'unresponsive': 'Unresponsive',
-                'pending_followup': 'Follow-up'
-            };
-            return types[type] || type;
-        },
-
-        getPipelineColor(stage) {
+        getPipelineTextColor(stage) {
             const colors = {
-                'New Candidate': 'bg-blue-400',
-                'Screening': 'bg-yellow-400',
-                'Interview Scheduled': 'bg-orange-400',
-                'Interview Completed': 'bg-purple-400',
-                'Assessment': 'bg-pink-400',
-                'Onboarding': 'bg-indigo-400',
-                'Active': 'bg-green-500'
+                'New Candidate': 'text-blue-600',
+                'Screening': 'text-yellow-600',
+                'Interview Scheduled': 'text-orange-600',
+                'Interview Completed': 'text-purple-600',
+                'Assessment': 'text-pink-600',
+                'Onboarding': 'text-indigo-600',
+                'Active': 'text-green-600',
+                'Inactive': 'text-gray-600',
+                'Rejected': 'text-red-600'
             };
-            return colors[stage] || 'bg-gray-400';
+            return colors[stage] || 'text-gray-600';
         },
 
         getStageBadgeColor(stage) {
