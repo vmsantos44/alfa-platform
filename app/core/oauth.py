@@ -6,29 +6,26 @@ import httpx
 import time
 import asyncio
 from typing import Optional, Dict
-from app.config import (
-    ZOHO_CLIENT_ID, 
-    ZOHO_CLIENT_SECRET, 
-    ZOHO_REFRESH_TOKEN,
-    ZOHO_ACCOUNTS_URL
-)
+from app.config import get_settings
 
 
 class ZohoOAuth:
     """
     Singleton OAuth manager for all Zoho products.
-    
+
     Features:
     - Automatic token refresh
     - Token caching (avoid unnecessary refreshes)
     - Thread-safe with asyncio lock
     - Rate limit awareness
     """
-    
+
     def __init__(self):
-        self.client_id = ZOHO_CLIENT_ID
-        self.client_secret = ZOHO_CLIENT_SECRET
-        self.refresh_token = ZOHO_REFRESH_TOKEN
+        settings = get_settings()
+        self.client_id = settings.zoho_client_id
+        self.client_secret = settings.zoho_client_secret
+        self.refresh_token = settings.zoho_refresh_token
+        self.accounts_domain = settings.zoho_accounts_domain
         self.access_token: Optional[str] = None
         self.token_expiry: float = 0
         self._lock = asyncio.Lock()
@@ -53,7 +50,7 @@ class ZohoOAuth:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{ZOHO_ACCOUNTS_URL}/oauth/v2/token",
+                f"{self.accounts_domain}/oauth/v2/token",
                 data={
                     "refresh_token": self.refresh_token,
                     "client_id": self.client_id,
