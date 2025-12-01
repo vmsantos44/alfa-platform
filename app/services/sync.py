@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
-from app.models.database_models import CandidateCache, SyncLog
+from app.models.database_models import CandidateCache, Interview, SyncLog
 from app.integrations.zoho.crm import ZohoCRM
 
 
@@ -538,3 +538,274 @@ class SyncService:
 
             await db.commit()
             return {"message": f"Created {len(sample_candidates)} sample candidates"}
+
+    @classmethod
+    async def sync_interviews_from_zoho(cls) -> Dict[str, Any]:
+        """
+        Sync interviews from Zoho CRM Events module to local database.
+
+        Fetches events that contain 'interview' in the title/subject and
+        links them to candidates.
+
+        Returns:
+            Dict with sync statistics
+        """
+        async with async_session() as db:
+            # Create sync log entry
+            sync_log = SyncLog(
+                sync_type="interviews",
+                status="running"
+            )
+            db.add(sync_log)
+            await db.commit()
+
+            stats = {
+                "records_processed": 0,
+                "records_created": 0,
+                "records_updated": 0,
+                "errors": 0,
+                "error_details": []
+            }
+
+            try:
+                # Initialize Zoho CRM client
+                crm = ZohoCRM()
+
+                # Fetch events from Zoho CRM (interviews are stored as Events)
+                page = 1
+                per_page = 200
+
+                while True:
+                    try:
+                        response = await crm.get_records(
+                            module="Events",
+                            page=page,
+                            per_page=per_page,
+                            fields=[
+                                "id", "Event_Title", "Subject", "Start_DateTime", "End_DateTime",
+                                "What_Id", "$se_module", "Owner", "Participants",
+                                "Check_In_Status", "Description", "Created_Time", "Modified_Time"
+                            ]
+                        )
+
+                        records = response.get("data", [])
+                        if not records:
+                            break
+
+                        for record in records:
+                            try:
+                                # Only process events that look like interviews
+                                title = record.get("Event_Title", "") or record.get("Subject", "") or ""
+                                if not cls._is_interview_event(title):
+                                    continue
+
+                                created = await cls._upsert_interview_from_zoho(db, record)
+                                stats["records_processed"] += 1
+                                if created:
+                                    stats["records_created"] += 1
+                                else:
+                                    stats["records_updated"] += 1
+                            except Exception as e:
+                                print(f"Error processing event {record.get('id')}: {e}")
+                                stats["errors"] += 1
+                                stats["error_details"].append(str(e))
+
+                        # Check if more pages exist
+                        info = response.get("info", {})
+                        if not info.get("more_records", False):
+                            break
+
+                        page += 1
+
+                    except Exception as e:
+                        print(f"Error fetching events page {page}: {e}")
+                        stats["errors"] += 1
+                        stats["error_details"].append(f"Page {page}: {str(e)}")
+                        break
+
+                # Mark sync as completed
+                sync_log.status = "completed"
+                sync_log.completed_at = datetime.utcnow()
+                sync_log.records_processed = stats["records_processed"]
+                sync_log.records_created = stats["records_created"]
+                sync_log.records_updated = stats["records_updated"]
+                sync_log.errors = stats["errors"]
+
+                await db.commit()
+
+            except Exception as e:
+                sync_log.status = "failed"
+                sync_log.error_message = str(e)
+                await db.commit()
+                raise
+
+            return stats
+
+    @classmethod
+    def _is_interview_event(cls, title: str) -> bool:
+        """Check if an event title indicates it's an interview"""
+        if not title:
+            return False
+        title_lower = title.lower()
+        interview_keywords = [
+            "interview", "screening", "auto interview", "candidate call",
+            "hiring call", "recruitment call", "phone screen"
+        ]
+        return any(keyword in title_lower for keyword in interview_keywords)
+
+    @classmethod
+    async def _upsert_interview_from_zoho(cls, db: AsyncSession, data: Dict[str, Any]) -> bool:
+        """
+        Insert or update an interview record from Zoho CRM event data.
+
+        Returns:
+            True if created, False if updated
+        """
+        zoho_event_id = str(data.get("id"))
+        if not zoho_event_id:
+            return False
+
+        # Check if exists
+        result = await db.execute(
+            select(Interview).where(Interview.zoho_event_id == zoho_event_id)
+        )
+        existing = result.scalar_one_or_none()
+
+        # Parse date helpers
+        def parse_datetime(value):
+            if not value:
+                return None
+            try:
+                if isinstance(value, datetime):
+                    return value
+                # Try ISO format
+                return datetime.fromisoformat(value.replace("Z", "+00:00").replace(" ", "T"))
+            except (ValueError, AttributeError):
+                return None
+
+        # Get event details
+        title = data.get("Event_Title", "") or data.get("Subject", "") or "Interview"
+        start_dt = parse_datetime(data.get("Start_DateTime"))
+        end_dt = parse_datetime(data.get("End_DateTime"))
+
+        if not start_dt:
+            return False  # Skip events without a start time
+
+        # Calculate duration
+        duration_minutes = 30  # Default
+        if start_dt and end_dt:
+            duration = (end_dt - start_dt).total_seconds() / 60
+            duration_minutes = int(duration) if duration > 0 else 30
+
+        # Get related record (candidate) info
+        what_id = data.get("What_Id")
+        related_module = data.get("$se_module", "")
+
+        # Try to get candidate ID
+        zoho_candidate_id = None
+        candidate_name = "Unknown"
+        candidate_email = None
+
+        if what_id:
+            if isinstance(what_id, dict):
+                zoho_candidate_id = what_id.get("id")
+                candidate_name = what_id.get("name", "Unknown")
+            else:
+                zoho_candidate_id = str(what_id)
+
+        # Get owner as interviewer
+        owner_data = data.get("Owner", {})
+        interviewer = owner_data.get("name") if isinstance(owner_data, dict) else str(owner_data) if owner_data else None
+
+        # Determine interview status from Check_In_Status and date
+        check_in_status = data.get("Check_In_Status", "")
+        now = datetime.utcnow()
+
+        if check_in_status:
+            check_in_lower = str(check_in_status).lower()
+            if "checked in" in check_in_lower or "completed" in check_in_lower:
+                status = "completed"
+                is_no_show = False
+            elif "no show" in check_in_lower or "absent" in check_in_lower:
+                status = "no_show"
+                is_no_show = True
+            elif "cancelled" in check_in_lower:
+                status = "cancelled"
+                is_no_show = False
+            else:
+                # Event is past but no check-in - likely no show
+                if start_dt < now:
+                    status = "no_show"
+                    is_no_show = True
+                else:
+                    status = "scheduled"
+                    is_no_show = False
+        else:
+            # No check-in status - determine by date
+            if start_dt < now:
+                # Past event with no status - assume completed unless very old
+                days_ago = (now - start_dt).days
+                if days_ago > 7:
+                    status = "completed"  # Assume completed if more than a week old
+                else:
+                    status = "no_show"  # Recent past event with no check-in
+                is_no_show = status == "no_show"
+            else:
+                status = "scheduled"
+                is_no_show = False
+
+        # Determine interview type from title
+        title_lower = title.lower()
+        if "auto interview" in title_lower:
+            interview_type = "Auto Interview"
+        elif "screening" in title_lower or "phone screen" in title_lower:
+            interview_type = "Initial Screening"
+        elif "final" in title_lower:
+            interview_type = "Final Interview"
+        else:
+            interview_type = "Interview"
+
+        if existing:
+            # Update existing record
+            existing.scheduled_date = start_dt
+            existing.duration_minutes = duration_minutes
+            existing.interview_type = interview_type
+            existing.candidate_name = candidate_name
+            existing.zoho_candidate_id = zoho_candidate_id
+            existing.interviewer = interviewer
+            existing.status = status
+            existing.is_no_show = is_no_show
+            existing.notes = data.get("Description")
+            existing.updated_at = datetime.utcnow()
+
+            return False
+        else:
+            # Create new record
+            new_interview = Interview(
+                zoho_event_id=zoho_event_id,
+                candidate_name=candidate_name,
+                candidate_email=candidate_email,
+                zoho_candidate_id=zoho_candidate_id,
+                scheduled_date=start_dt,
+                duration_minutes=duration_minutes,
+                interview_type=interview_type,
+                status=status,
+                is_no_show=is_no_show,
+                interviewer=interviewer,
+                notes=data.get("Description")
+            )
+            db.add(new_interview)
+            return True
+
+    @classmethod
+    async def get_last_interview_sync(cls) -> Optional[datetime]:
+        """Get the timestamp of the last successful interview sync"""
+        async with async_session() as db:
+            result = await db.execute(
+                select(SyncLog)
+                .where(SyncLog.sync_type == "interviews", SyncLog.status == "completed")
+                .order_by(SyncLog.completed_at.desc())
+                .limit(1)
+            )
+            sync_log = result.scalar_one_or_none()
+            return sync_log.completed_at if sync_log else None

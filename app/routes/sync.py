@@ -105,13 +105,37 @@ async def sync_candidates():
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
+@router.post("/interviews")
+async def sync_interviews():
+    """
+    Sync interviews from Zoho CRM Events module to local database.
+    Fetches events that contain 'interview' in the title and maps them to Interview records.
+    """
+    try:
+        stats = await SyncService.sync_interviews_from_zoho()
+        return {
+            "success": True,
+            "message": "Interview sync completed",
+            **stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interview sync failed: {str(e)}")
+
+
 @router.get("/status")
 async def get_sync_status():
-    """Get the status of the last sync"""
-    last_sync = await SyncService.get_last_sync()
+    """Get the status of the last sync for both candidates and interviews"""
+    last_candidate_sync = await SyncService.get_last_sync()
+    last_interview_sync = await SyncService.get_last_interview_sync()
     return {
-        "last_sync": last_sync.isoformat() if last_sync else None,
-        "status": "ok" if last_sync else "never_synced"
+        "candidates": {
+            "last_sync": last_candidate_sync.isoformat() if last_candidate_sync else None,
+            "status": "ok" if last_candidate_sync else "never_synced"
+        },
+        "interviews": {
+            "last_sync": last_interview_sync.isoformat() if last_interview_sync else None,
+            "status": "ok" if last_interview_sync else "never_synced"
+        }
     }
 
 
@@ -156,3 +180,53 @@ async def debug_zoho_data():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+
+@router.get("/debug-events")
+async def debug_zoho_events():
+    """
+    Debug endpoint to see raw Zoho CRM Events data.
+    Shows what interview events Zoho is returning.
+    """
+    from app.integrations.zoho.crm import ZohoCRM
+
+    try:
+        crm = ZohoCRM()
+        response = await crm.get_records(
+            module="Events",
+            page=1,
+            per_page=20,
+            fields=[
+                "id", "Event_Title", "Subject", "Start_DateTime", "End_DateTime",
+                "What_Id", "$se_module", "Owner", "Participants",
+                "Check_In_Status", "Description", "Created_Time", "Modified_Time"
+            ]
+        )
+
+        records = response.get("data", [])
+
+        # Identify interview events
+        interview_events = []
+        other_events = []
+        interview_keywords = ["interview", "screening", "auto interview", "candidate call",
+                             "hiring call", "recruitment call", "phone screen"]
+
+        for record in records:
+            title = record.get("Event_Title", "") or record.get("Subject", "") or ""
+            title_lower = title.lower()
+            is_interview = any(kw in title_lower for kw in interview_keywords)
+            if is_interview:
+                interview_events.append(record)
+            else:
+                other_events.append(record)
+
+        return {
+            "total_events": len(records),
+            "interview_events": len(interview_events),
+            "other_events": len(other_events),
+            "interview_samples": interview_events[:5],
+            "other_samples": other_events[:5],
+            "info": response.get("info", {})
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug events failed: {str(e)}")
