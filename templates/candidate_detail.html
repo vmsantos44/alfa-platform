@@ -834,18 +834,19 @@
                                 <!-- Email body -->
                                 <div x-show="!loadingEmailContent" class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                                     <!-- HTML content in sandboxed iframe -->
-                                    <template x-if="selectedEmail?.html_content">
-                                        <iframe
-                                            :srcdoc="selectedEmail?.html_content"
-                                            sandbox="allow-same-origin"
-                                            class="w-full border-0"
-                                            style="min-height: 300px; max-height: 400px;"
-                                        ></iframe>
-                                    </template>
+                                    <iframe
+                                        x-show="selectedEmail?.html_content"
+                                        :srcdoc="selectedEmail?.html_content || ''"
+                                        sandbox="allow-same-origin"
+                                        class="w-full border-0"
+                                        style="min-height: 300px; max-height: 400px;"
+                                    ></iframe>
                                     <!-- Plain text fallback -->
-                                    <template x-if="!selectedEmail?.html_content">
-                                        <div class="p-4 text-gray-600 whitespace-pre-wrap leading-relaxed" x-text="stripHtml(selectedEmail?.body_full || selectedEmail?.body_snippet || 'No content available')"></div>
-                                    </template>
+                                    <div
+                                        x-show="!selectedEmail?.html_content"
+                                        class="p-4 text-gray-600 whitespace-pre-wrap leading-relaxed"
+                                        x-text="stripHtml(selectedEmail?.body_full || selectedEmail?.body_snippet || 'No content available')"
+                                    ></div>
                                 </div>
                             </div>
 
@@ -1268,6 +1269,12 @@ function candidateDetailApp() {
                 const response = await fetch(`/api/candidates/${this.candidate.id}/emails/${email.id}/content`);
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Email content response:', {
+                        id: data.id,
+                        hasHtmlContent: !!data.html_content,
+                        htmlLength: data.html_content?.length,
+                        contentLength: data.content?.length
+                    });
                     // Update the email in our list with the content
                     const idx = this.emailsData.emails.findIndex(e => e.id === email.id);
                     if (idx !== -1) {
@@ -1275,10 +1282,17 @@ function candidateDetailApp() {
                         this.emailsData.emails[idx].html_content = data.html_content;
                         this.emailsData.emails[idx].body_snippet = data.content?.substring(0, 200) || '';
                     }
-                    // Also update selectedEmail reference
+                    // Also update selectedEmail - create new object to trigger reactivity
                     if (this.selectedEmail?.id === email.id) {
-                        this.selectedEmail.body_full = data.content;
-                        this.selectedEmail.html_content = data.html_content;
+                        this.selectedEmail = {
+                            ...this.selectedEmail,
+                            body_full: data.content,
+                            html_content: data.html_content
+                        };
+                        console.log('Updated selectedEmail:', {
+                            hasHtmlContent: !!this.selectedEmail.html_content,
+                            htmlPreview: this.selectedEmail.html_content?.substring(0, 100)
+                        });
                     }
                 }
             } catch (err) {
