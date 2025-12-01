@@ -333,6 +333,7 @@ class CrmNote(Base):
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     raw_content: Mapped[str] = mapped_column(Text)  # Full note text from CRM
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Summarized version
+    key_phrases: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated key phrases from RAKE
 
     # Metadata from Zoho
     created_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

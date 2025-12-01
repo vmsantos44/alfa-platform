@@ -566,6 +566,14 @@
                                 <p x-text="getCrmNotesSummary()"></p>
                             </div>
 
+                            <!-- Key Phrases (aggregated from all notes) -->
+                            <div x-show="getAllKeyPhrases().length > 0" class="flex flex-wrap gap-1 mb-3">
+                                <template x-for="phrase in getAllKeyPhrases().slice(0, 8)" :key="phrase">
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700" x-text="phrase"></span>
+                                </template>
+                                <span x-show="getAllKeyPhrases().length > 8" class="px-2 py-0.5 text-xs text-gray-500" x-text="'+' + (getAllKeyPhrases().length - 8) + ' more'"></span>
+                            </div>
+
                             <!-- Expandable detailed notes (newest first) -->
                             <details class="mt-2">
                                 <summary class="text-sm text-blue-600 cursor-pointer hover:text-blue-800 font-medium">
@@ -760,6 +768,20 @@ function candidateDetailApp() {
             }
 
             return combined || notes[0].summary || notes[0].raw_content;
+        },
+
+        getAllKeyPhrases() {
+            // Aggregate unique key phrases from all CRM notes
+            if (!this.candidate?.crm_notes?.length) return [];
+
+            const allPhrases = new Set();
+            for (const note of this.candidate.crm_notes) {
+                if (note.key_phrases && Array.isArray(note.key_phrases)) {
+                    note.key_phrases.forEach(phrase => allPhrases.add(phrase));
+                }
+            }
+
+            return Array.from(allPhrases);
         },
 
         getStageBadgeColor(stage) {

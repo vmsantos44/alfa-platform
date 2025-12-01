@@ -92,12 +92,33 @@ class CrmNoteResponse(BaseModel):
     title: Optional[str] = None
     summary: Optional[str] = None  # Summarized version for dashboard display
     raw_content: str  # Full note text
+    key_phrases: Optional[list[str]] = None  # Key phrases extracted via RAKE
     created_by: Optional[str] = None
     zoho_created_time: Optional[datetime] = None
     zoho_modified_time: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+    @classmethod
+    def from_orm_with_phrases(cls, note):
+        """Convert ORM object, parsing key_phrases from comma-separated string"""
+        phrases = None
+        if note.key_phrases:
+            phrases = [p.strip() for p in note.key_phrases.split(',') if p.strip()]
+        return cls(
+            id=note.id,
+            zoho_note_id=note.zoho_note_id,
+            zoho_candidate_id=note.zoho_candidate_id,
+            parent_module=note.parent_module,
+            title=note.title,
+            summary=note.summary,
+            raw_content=note.raw_content,
+            key_phrases=phrases,
+            created_by=note.created_by,
+            zoho_created_time=note.zoho_created_time,
+            zoho_modified_time=note.zoho_modified_time
+        )
 
 
 # ============================================

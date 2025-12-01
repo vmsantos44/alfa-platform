@@ -1153,6 +1153,85 @@ class SyncService:
         return first_sentence[:max_length - 3].rsplit(' ', 1)[0] + "..."
 
     @classmethod
+    def extract_key_phrases(cls, content: str, max_phrases: int = 5) -> list[str]:
+        """
+        Extract key phrases from note content using RAKE algorithm.
+
+        Args:
+            content: Raw note content
+            max_phrases: Maximum number of phrases to extract
+
+        Returns:
+            List of key phrases
+        """
+        if not content or len(content) < 10:
+            return []
+
+        try:
+            from rake_nltk import Rake
+
+            # Initialize RAKE with default settings
+            rake = Rake(
+                min_length=1,
+                max_length=3,
+                include_repeated_phrases=False
+            )
+
+            # Extract keywords
+            rake.extract_keywords_from_text(content)
+
+            # Get ranked phrases (returns list of tuples: (score, phrase))
+            ranked = rake.get_ranked_phrases_with_scores()
+
+            # Filter and return top phrases
+            phrases = []
+            seen = set()
+            for score, phrase in ranked[:max_phrases * 2]:  # Get more to filter
+                # Clean up phrase
+                phrase = phrase.strip().lower()
+
+                # Skip very short or already seen
+                if len(phrase) < 3 or phrase in seen:
+                    continue
+
+                # Skip common stopwords that might slip through
+                if phrase in {'the', 'and', 'for', 'with', 'this', 'that', 'from'}:
+                    continue
+
+                seen.add(phrase)
+                phrases.append(phrase)
+
+                if len(phrases) >= max_phrases:
+                    break
+
+            return phrases
+
+        except ImportError:
+            # RAKE not installed, return empty
+            print("⚠️ rake-nltk not installed, skipping key phrase extraction")
+            return []
+        except Exception as e:
+            print(f"⚠️ Error extracting key phrases: {e}")
+            return []
+
+    @classmethod
+    def summarize_with_phrases(cls, content: str, max_length: int = 200) -> dict:
+        """
+        Generate both a summary and key phrases for note content.
+
+        Args:
+            content: Raw note content
+            max_length: Maximum length of summary
+
+        Returns:
+            Dict with 'summary' and 'key_phrases' keys
+        """
+        return {
+            "summary": cls.summarize_note(content, max_length),
+            "key_phrases": cls.extract_key_phrases(content)
+        }
+
+    @classmethod
     async def sync_notes_from_zoho(cls, full_sync: bool = False) -> Dict[str, Any]:
         """
         Sync notes from Zoho CRM Notes module to local database.
@@ -1323,14 +1402,17 @@ class SyncService:
         created_time = cls._parse_datetime(data.get("Created_Time"))
         modified_time = cls._parse_datetime(data.get("Modified_Time"))
 
-        # Generate summary
+        # Generate summary and extract key phrases
         summary = cls.summarize_note(raw_content)
+        phrases = cls.extract_key_phrases(raw_content)
+        key_phrases_str = ', '.join(phrases) if phrases else None
 
         if existing:
             # Update existing note
             existing.title = title
             existing.raw_content = raw_content
             existing.summary = summary
+            existing.key_phrases = key_phrases_str
             existing.zoho_candidate_id = zoho_candidate_id
             existing.parent_module = parent_module
             existing.created_by = created_by
@@ -1347,6 +1429,7 @@ class SyncService:
                 title=title,
                 raw_content=raw_content,
                 summary=summary,
+                key_phrases=key_phrases_str,
                 created_by=created_by,
                 zoho_created_time=created_time,
                 zoho_modified_time=modified_time

@@ -35,6 +35,10 @@ python-dateutil==2.8.2
 # Background task scheduler
 apscheduler==3.10.4
 
+# Key phrase extraction
+rake-nltk==1.0.6
+nltk==3.8.1
+
 # PDF generation (for documents feature)
 # weasyprint==60.1
 
