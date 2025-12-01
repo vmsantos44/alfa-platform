@@ -617,124 +617,277 @@
                         <span class="ml-3 text-gray-500">Loading emails...</span>
                     </div>
 
-                    <!-- AI Insight Banner (if needs follow-up) -->
-                    <div x-show="!emailsLoading && emailThread.needs_followup" class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                        <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            <div>
-                                <p class="text-sm font-medium text-amber-800">Follow-up needed</p>
-                                <p class="text-sm text-amber-700" x-text="'Candidate replied ' + emailThread.days_since_last_response + ' days ago with no response from team.'"></p>
+                    <!-- Email Content (when loaded) -->
+                    <div x-show="!emailsLoading">
+
+                        <!-- Filter Row -->
+                        <div class="flex flex-wrap items-center gap-2 mb-4">
+                            <!-- Type Filters -->
+                            <button
+                                @click="emailFilter = 'received'"
+                                :class="emailFilter === 'received' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'"
+                                class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                                Received
+                                <span :class="emailFilter === 'received' ? 'bg-blue-500' : 'bg-gray-100'" class="ml-1 px-2 py-0.5 rounded-full text-xs" x-text="emailsData.emails?.filter(e => e.direction === 'inbound').length || 0"></span>
+                            </button>
+
+                            <button
+                                @click="emailFilter = 'sent'"
+                                :class="emailFilter === 'sent' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'"
+                                class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                Sent
+                                <span :class="emailFilter === 'sent' ? 'bg-blue-500' : 'bg-gray-100'" class="ml-1 px-2 py-0.5 rounded-full text-xs" x-text="emailsData.emails?.filter(e => e.direction === 'outbound').length || 0"></span>
+                            </button>
+
+                            <button
+                                @click="emailFilter = 'all'"
+                                :class="emailFilter === 'all' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'"
+                                class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                                All
+                            </button>
+
+                            <!-- Refresh Button -->
+                            <button
+                                @click="loadEmails(true)"
+                                :disabled="emailsLoading"
+                                class="ml-auto flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-lg transition-all"
+                            >
+                                <svg class="w-4 h-4" :class="emailsLoading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                Refresh
+                            </button>
+                        </div>
+
+                        <!-- AI Insight Banner (if needs follow-up) -->
+                        <div x-show="emailThread.needs_followup" class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                <div>
+                                    <p class="text-sm font-medium text-amber-800">Follow-up needed</p>
+                                    <p class="text-sm text-amber-700" x-text="'Candidate replied ' + emailThread.days_since_last_response + ' days ago with no response from team.'"></p>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Email List -->
-                    <div x-show="!emailsLoading && emailsData.emails?.length > 0">
-                        <div class="space-y-3">
-                            <template x-for="email in emailsData.emails" :key="email.id">
-                                <div
-                                    class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 cursor-pointer transition-colors"
-                                    :class="{'border-l-4 border-green-400': email.direction === 'inbound', 'border-l-4 border-blue-400': email.direction === 'outbound'}"
-                                    @click="selectEmail(email)"
-                                >
-                                    <div class="flex items-start justify-between">
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <!-- Direction badge -->
-                                                <span
-                                                    class="px-2 py-0.5 text-xs rounded-full"
-                                                    :class="email.direction === 'inbound' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'"
-                                                    x-text="email.direction === 'inbound' ? 'Received' : 'Sent'"
-                                                ></span>
-                                                <!-- Attachment indicator -->
-                                                <span x-show="email.has_attachment" class="text-gray-400" title="Has attachment">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                                                    </svg>
-                                                </span>
+                        <!-- Email List -->
+                        <div x-show="filteredEmails.length > 0" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div class="divide-y divide-gray-100">
+                                <template x-for="email in filteredEmails" :key="email.id">
+                                    <div
+                                        @click="openEmailModal(email)"
+                                        class="p-4 cursor-pointer transition-all hover:bg-gray-50"
+                                    >
+                                        <div class="flex items-center gap-4">
+                                            <!-- Type Indicator -->
+                                            <div
+                                                :class="email.direction === 'inbound' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                                class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                                            >
+                                                <svg x-show="email.direction === 'inbound'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                                                <svg x-show="email.direction === 'outbound'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                                             </div>
-                                            <p class="font-medium text-gray-800 truncate" x-text="email.subject || '(No subject)'"></p>
-                                            <p class="text-sm text-gray-500 truncate">
-                                                <span x-text="email.direction === 'inbound' ? 'From: ' : 'To: '"></span>
-                                                <span x-text="email.direction === 'inbound' ? email.from_address : email.to_address"></span>
-                                            </p>
-                                            <p class="text-sm text-gray-600 mt-1 line-clamp-2" x-text="email.body_snippet"></p>
-                                        </div>
-                                        <div class="text-right ml-4 flex-shrink-0">
-                                            <p class="text-xs text-gray-500" x-text="formatEmailDate(email.sent_at)"></p>
-                                            <p class="text-xs text-gray-400" x-text="formatEmailTime(email.sent_at)"></p>
-                                        </div>
-                                    </div>
 
-                                    <!-- Expanded email body -->
-                                    <div x-show="selectedEmail?.id === email.id" x-collapse class="mt-4 pt-4 border-t border-gray-200">
-                                        <div class="text-sm text-gray-600 space-y-1 mb-3">
-                                            <p><span class="text-gray-500">From:</span> <span x-text="email.from_address"></span></p>
-                                            <p><span class="text-gray-500">To:</span> <span x-text="email.to_address"></span></p>
-                                            <p x-show="email.cc_address"><span class="text-gray-500">Cc:</span> <span x-text="email.cc_address"></span></p>
-                                            <p><span class="text-gray-500">Date:</span> <span x-text="formatDateTime(email.sent_at)"></span></p>
-                                        </div>
-                                        <!-- Loading state for content -->
-                                        <div x-show="loadingEmailContent === email.id" class="flex items-center justify-center py-4">
-                                            <div class="spinner w-5 h-5"></div>
-                                            <span class="ml-2 text-sm text-gray-500">Loading content...</span>
-                                        </div>
-                                        <!-- Email content in iframe (HTML) or plain text -->
-                                        <div x-show="loadingEmailContent !== email.id" class="bg-white rounded border overflow-hidden">
-                                            <!-- HTML content in sandboxed iframe -->
-                                            <template x-if="email.html_content">
-                                                <iframe
-                                                    :srcdoc="email.html_content"
-                                                    sandbox="allow-same-origin"
-                                                    class="w-full border-0"
-                                                    style="min-height: 300px; max-height: 500px;"
-                                                    @load="$el.style.height = Math.min($el.contentWindow.document.body.scrollHeight + 20, 500) + 'px'"
-                                                ></iframe>
-                                            </template>
-                                            <!-- Plain text fallback -->
-                                            <template x-if="!email.html_content">
-                                                <div class="p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto" x-text="email.body_full || email.body_snippet || 'No content available'"></div>
-                                            </template>
+                                            <!-- Email Content -->
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-medium text-gray-700 truncate" x-text="email.direction === 'inbound' ? (email.from_address || 'Unknown') : (email.to_address || 'Unknown')"></span>
+                                                    <!-- Attachment indicator -->
+                                                    <span x-show="email.has_attachment" class="text-gray-400" title="Has attachment">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                                                        </svg>
+                                                    </span>
+                                                </div>
+                                                <p class="text-sm text-gray-600 truncate" x-text="email.subject || '(No subject)'"></p>
+                                                <p class="text-xs text-gray-400 truncate mt-0.5" x-text="email.body_snippet"></p>
+                                            </div>
+
+                                            <!-- Date & Arrow -->
+                                            <div class="flex items-center gap-2 text-gray-400 flex-shrink-0">
+                                                <span class="text-xs" x-text="formatEmailDate(email.sent_at)"></span>
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </template>
+                                </template>
+                            </div>
                         </div>
 
-                        <!-- Load More Button -->
-                        <div x-show="emailsData.has_more" class="mt-4 text-center">
+                        <!-- Empty State -->
+                        <div x-show="emailsData.emails?.length === 0" class="text-gray-500 text-center py-12 bg-white rounded-xl border border-gray-200">
+                            <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            <p class="text-lg font-medium">No emails found</p>
+                            <p class="text-sm mt-1">Email history will appear here once synced</p>
                             <button
+                                @click="loadEmails(true)"
+                                class="mt-4 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 text-sm"
+                            >
+                                Fetch email history
+                            </button>
+                        </div>
+
+                        <!-- No Results for Filter -->
+                        <div x-show="emailsData.emails?.length > 0 && filteredEmails.length === 0" class="text-gray-500 text-center py-8 bg-white rounded-xl border border-gray-200">
+                            <svg class="w-10 h-10 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            <p>No <span x-text="emailFilter"></span> emails to display</p>
+                        </div>
+
+                        <!-- Load More & Stats -->
+                        <div x-show="emailsData.emails?.length > 0" class="mt-4 flex items-center justify-between">
+                            <div class="text-xs text-gray-400">
+                                <span x-text="'Showing ' + filteredEmails.length + ' of ' + emailsData.total_count + ' emails'"></span>
+                            </div>
+                            <button
+                                x-show="emailsData.has_more"
                                 @click="loadOlderEmails()"
                                 :disabled="loadingOlderEmails"
                                 class="px-4 py-2 text-sm text-alfa-blue border border-alfa-blue rounded-lg hover:bg-blue-50 disabled:opacity-50"
                             >
-                                <span x-show="!loadingOlderEmails">Load older emails</span>
+                                <span x-show="!loadingOlderEmails">Load more</span>
                                 <span x-show="loadingOlderEmails">Loading...</span>
                             </button>
                         </div>
-
-                        <!-- Cache Info -->
-                        <div class="mt-4 text-xs text-gray-400 text-center">
-                            <span x-text="'Showing ' + emailsData.emails.length + ' of ' + emailsData.total_count + ' emails'"></span>
-                            <span x-show="emailsData.oldest_cached_date" x-text="' • Cached from ' + formatDate(emailsData.oldest_cached_date)"></span>
-                        </div>
                     </div>
 
-                    <!-- Empty State -->
-                    <div x-show="!emailsLoading && emailsData.emails?.length === 0" class="text-gray-500 text-center py-12">
-                        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                        </svg>
-                        <p class="text-lg font-medium">No emails found</p>
-                        <p class="text-sm mt-1">Email history will appear here once synced</p>
-                        <button
-                            @click="loadEmails(true)"
-                            class="mt-4 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 text-sm"
+                    <!-- Email Detail Modal -->
+                    <div
+                        x-show="emailModalOpen"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0"
+                        x-transition:enter-end="opacity-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100"
+                        x-transition:leave-end="opacity-0"
+                        class="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+                        @click="closeEmailModal()"
+                    >
+                        <div
+                            x-show="emailModalOpen"
+                            x-transition:enter="transition ease-out duration-200"
+                            x-transition:enter-start="opacity-0 scale-95"
+                            x-transition:enter-end="opacity-100 scale-100"
+                            @click.stop
+                            class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
                         >
-                            Fetch email history
-                        </button>
+                            <!-- Modal Header -->
+                            <div class="flex items-center justify-between p-4 border-b border-gray-100">
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        :class="selectedEmail?.direction === 'inbound' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                        class="w-10 h-10 rounded-full flex items-center justify-center"
+                                    >
+                                        <svg x-show="selectedEmail?.direction === 'inbound'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                                        <svg x-show="selectedEmail?.direction === 'outbound'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                    </div>
+                                    <div>
+                                        <p class="font-semibold text-gray-800" x-text="selectedEmail?.direction === 'inbound' ? (selectedEmail?.from_address || 'Unknown') : (selectedEmail?.to_address || 'Unknown')"></p>
+                                        <p class="text-sm text-gray-500" x-text="selectedEmail?.direction === 'inbound' ? 'Received' : 'Sent'"></p>
+                                    </div>
+                                </div>
+                                <button
+                                    @click="closeEmailModal()"
+                                    class="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+
+                            <!-- Email Content -->
+                            <div class="flex-1 overflow-y-auto p-6">
+                                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    <span x-text="selectedEmail?.sent_at ? new Date(selectedEmail.sent_at).toLocaleString() : ''"></span>
+                                </div>
+                                <h2 class="text-xl font-semibold text-gray-800 mb-4" x-text="selectedEmail?.subject || '(No subject)'"></h2>
+
+                                <!-- Email metadata -->
+                                <div class="text-sm text-gray-500 space-y-1 mb-4 p-3 bg-gray-50 rounded-lg">
+                                    <p><span class="font-medium">From:</span> <span x-text="selectedEmail?.from_address"></span></p>
+                                    <p><span class="font-medium">To:</span> <span x-text="selectedEmail?.to_address"></span></p>
+                                    <p x-show="selectedEmail?.cc_address"><span class="font-medium">Cc:</span> <span x-text="selectedEmail?.cc_address"></span></p>
+                                </div>
+
+                                <!-- Loading content -->
+                                <div x-show="loadingEmailContent" class="flex items-center justify-center py-8">
+                                    <div class="spinner w-6 h-6"></div>
+                                    <span class="ml-3 text-gray-500">Loading email content...</span>
+                                </div>
+
+                                <!-- Email body -->
+                                <div x-show="!loadingEmailContent" class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                    <!-- HTML content in sandboxed iframe -->
+                                    <template x-if="selectedEmail?.html_content">
+                                        <iframe
+                                            :srcdoc="selectedEmail?.html_content"
+                                            sandbox="allow-same-origin"
+                                            class="w-full border-0"
+                                            style="min-height: 300px; max-height: 400px;"
+                                        ></iframe>
+                                    </template>
+                                    <!-- Plain text fallback -->
+                                    <template x-if="!selectedEmail?.html_content">
+                                        <div class="p-4 text-gray-600 whitespace-pre-wrap leading-relaxed" x-text="selectedEmail?.body_full || selectedEmail?.body_snippet || 'No content available'"></div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Reply Section (only for received emails) -->
+                            <template x-if="selectedEmail?.direction === 'inbound'">
+                                <div class="border-t border-gray-100 p-4">
+                                    <template x-if="!showReplyForm">
+                                        <button
+                                            @click="showReplyForm = true"
+                                            class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                                            Reply
+                                        </button>
+                                    </template>
+                                    <template x-if="showReplyForm">
+                                        <div class="space-y-3">
+                                            <div class="text-sm text-gray-500">
+                                                Replying to: <span class="font-medium" x-text="selectedEmail?.from_address"></span>
+                                            </div>
+                                            <textarea
+                                                x-model="replyContent"
+                                                placeholder="Type your reply..."
+                                                class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                                                rows="4"
+                                            ></textarea>
+                                            <div class="flex gap-2">
+                                                <button
+                                                    @click="sendReply()"
+                                                    :disabled="!replyContent.trim() || sendingReply"
+                                                    :class="!replyContent.trim() || sendingReply ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'"
+                                                    class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition-colors font-medium"
+                                                >
+                                                    <svg x-show="!sendingReply" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                                    <div x-show="sendingReply" class="spinner w-4 h-4"></div>
+                                                    <span x-text="sendingReply ? 'Sending...' : 'Send Reply'"></span>
+                                                </button>
+                                                <button
+                                                    @click="showReplyForm = false; replyContent = ''"
+                                                    class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                            <!-- Success/Error message -->
+                                            <div x-show="replyMessage" :class="replySuccess ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'" class="p-3 rounded-lg border text-sm" x-text="replyMessage"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
 
@@ -784,10 +937,18 @@ function candidateDetailApp() {
         emailsLoaded: false,
         emailsLoading: false,
         loadingOlderEmails: false,
-        loadingEmailContent: null,  // ID of email currently loading content
+        loadingEmailContent: false,
         emailsData: { emails: [], total_count: 0, has_more: false },
         emailThread: { needs_followup: false, days_since_last_response: null },
         selectedEmail: null,
+        emailFilter: 'all',  // 'all', 'received', 'sent'
+        emailModalOpen: false,
+        // Reply state
+        showReplyForm: false,
+        replyContent: '',
+        sendingReply: false,
+        replyMessage: '',
+        replySuccess: false,
 
         async init() {
             // Get candidate ID from URL
@@ -966,24 +1127,39 @@ function candidateDetailApp() {
             });
         },
 
+        // Computed property for filtered emails
+        get filteredEmails() {
+            if (!this.emailsData.emails) return [];
+            if (this.emailFilter === 'all') return this.emailsData.emails;
+            if (this.emailFilter === 'received') return this.emailsData.emails.filter(e => e.direction === 'inbound');
+            if (this.emailFilter === 'sent') return this.emailsData.emails.filter(e => e.direction === 'outbound');
+            return this.emailsData.emails;
+        },
+
         // Email methods
-        async selectEmail(email) {
-            // Toggle selection
-            if (this.selectedEmail?.id === email.id) {
-                this.selectedEmail = null;
-                return;
-            }
-
+        async openEmailModal(email) {
             this.selectedEmail = email;
+            this.emailModalOpen = true;
+            this.showReplyForm = false;
+            this.replyContent = '';
+            this.replyMessage = '';
 
-            // If no body content, fetch it on-demand
-            if (!email.body_full) {
+            // Fetch full content if not already loaded
+            if (!email.body_full && !email.html_content) {
                 await this.fetchEmailContent(email);
             }
         },
 
+        closeEmailModal() {
+            this.emailModalOpen = false;
+            this.selectedEmail = null;
+            this.showReplyForm = false;
+            this.replyContent = '';
+            this.replyMessage = '';
+        },
+
         async fetchEmailContent(email) {
-            this.loadingEmailContent = email.id;
+            this.loadingEmailContent = true;
 
             try {
                 const response = await fetch(`/api/candidates/${this.candidate.id}/emails/${email.id}/content`);
@@ -1005,7 +1181,48 @@ function candidateDetailApp() {
             } catch (err) {
                 console.error('Failed to fetch email content:', err);
             } finally {
-                this.loadingEmailContent = null;
+                this.loadingEmailContent = false;
+            }
+        },
+
+        async sendReply() {
+            if (!this.replyContent.trim() || !this.selectedEmail) return;
+
+            this.sendingReply = true;
+            this.replyMessage = '';
+
+            try {
+                const response = await fetch('/api/mail/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: [this.selectedEmail.from_address],
+                        subject: 'Re: ' + (this.selectedEmail.subject || ''),
+                        content: this.replyContent,
+                        is_html: false
+                    })
+                });
+
+                if (response.ok) {
+                    this.replySuccess = true;
+                    this.replyMessage = 'Reply sent successfully!';
+                    this.replyContent = '';
+                    // Close form after a short delay
+                    setTimeout(() => {
+                        this.showReplyForm = false;
+                        this.replyMessage = '';
+                    }, 2000);
+                } else {
+                    const error = await response.json();
+                    this.replySuccess = false;
+                    this.replyMessage = error.detail || 'Failed to send reply';
+                }
+            } catch (err) {
+                console.error('Failed to send reply:', err);
+                this.replySuccess = false;
+                this.replyMessage = 'Failed to send reply. Please try again.';
+            } finally {
+                this.sendingReply = false;
             }
         },
 
