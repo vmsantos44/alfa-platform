@@ -398,15 +398,17 @@ async def debug_zoho_emails(
             per_page=20
         )
 
-        emails = response.get("data", [])
+        # Zoho returns emails in 'email_related_list' or 'data' depending on version
+        emails = response.get("email_related_list", response.get("data", []))
 
         return {
             "zoho_id": zoho_id,
             "module": module,
-            "total_emails": len(emails),
-            "sample_emails": emails[:5],
+            "total_emails": len(emails) if emails else 0,
+            "sample_emails": emails[:5] if emails else [],
             "info": response.get("info", {}),
-            "raw_response_keys": list(response.keys()) if response else []
+            "raw_response_keys": list(response.keys()) if response else [],
+            "raw_response": response  # Show full response for debugging
         }
     except Exception as e:
         return {
