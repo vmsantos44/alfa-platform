@@ -341,6 +341,49 @@ class ZohoAPI:
             raise Exception(f"Failed to get emails for {module}/{record_id}: {str(e)}")
 
     @api_retry
+    async def get_email_content(
+        self,
+        module: str,
+        record_id: str,
+        message_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get full content of a single email from Zoho CRM.
+
+        Args:
+            module: CRM module (Leads, Contacts, etc.)
+            record_id: The record ID
+            message_id: The email message ID
+
+        Returns:
+            Dict with email details including 'content' (HTML body)
+        """
+        headers = await self._get_headers()
+
+        try:
+            response = await self.client.get(
+                f"{self.settings.zoho_api_domain}/crm/v2/{module}/{record_id}/Emails/{message_id}",
+                headers=headers,
+            )
+
+            # Handle 204 No Content
+            if response.status_code == 204:
+                return {}
+
+            response.raise_for_status()
+            data = response.json()
+
+            # Zoho returns the email in 'Emails' array
+            emails = data.get("Emails", [])
+            return emails[0] if emails else data
+
+        except httpx.HTTPError as e:
+            if hasattr(e, "response") and e.response:
+                if e.response.status_code in (204, 404):
+                    return {}
+            raise Exception(f"Failed to get email content: {str(e)}")
+
+    @api_retry
     async def get_attachments(self, module: str, record_id: str) -> Dict[str, Any]:
         """List all attachments for a record"""
         headers = await self._get_headers()

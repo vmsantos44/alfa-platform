@@ -637,7 +637,7 @@
                                 <div
                                     class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 cursor-pointer transition-colors"
                                     :class="{'border-l-4 border-green-400': email.direction === 'inbound', 'border-l-4 border-blue-400': email.direction === 'outbound'}"
-                                    @click="selectedEmail = selectedEmail?.id === email.id ? null : email"
+                                    @click="selectEmail(email)"
                                 >
                                     <div class="flex items-start justify-between">
                                         <div class="flex-1 min-w-0">
@@ -676,7 +676,13 @@
                                             <p x-show="email.cc_address"><span class="text-gray-500">Cc:</span> <span x-text="email.cc_address"></span></p>
                                             <p><span class="text-gray-500">Date:</span> <span x-text="formatDateTime(email.sent_at)"></span></p>
                                         </div>
-                                        <div class="bg-white rounded p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto" x-text="email.body_full || email.body_snippet || 'No content'"></div>
+                                        <!-- Loading state for content -->
+                                        <div x-show="loadingEmailContent === email.id" class="flex items-center justify-center py-4">
+                                            <div class="spinner w-5 h-5"></div>
+                                            <span class="ml-2 text-sm text-gray-500">Loading content...</span>
+                                        </div>
+                                        <!-- Email content -->
+                                        <div x-show="loadingEmailContent !== email.id" class="bg-white rounded p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto" x-text="email.body_full || email.body_snippet || 'No content available'"></div>
                                     </div>
                                 </div>
                             </template>
@@ -763,6 +769,7 @@ function candidateDetailApp() {
         emailsLoaded: false,
         emailsLoading: false,
         loadingOlderEmails: false,
+        loadingEmailContent: null,  // ID of email currently loading content
         emailsData: { emails: [], total_count: 0, has_more: false },
         emailThread: { needs_followup: false, days_since_last_response: null },
         selectedEmail: null,
@@ -945,6 +952,46 @@ function candidateDetailApp() {
         },
 
         // Email methods
+        async selectEmail(email) {
+            // Toggle selection
+            if (this.selectedEmail?.id === email.id) {
+                this.selectedEmail = null;
+                return;
+            }
+
+            this.selectedEmail = email;
+
+            // If no body content, fetch it on-demand
+            if (!email.body_full) {
+                await this.fetchEmailContent(email);
+            }
+        },
+
+        async fetchEmailContent(email) {
+            this.loadingEmailContent = email.id;
+
+            try {
+                const response = await fetch(`/api/candidates/${this.candidate.id}/emails/${email.id}/content`);
+                if (response.ok) {
+                    const data = await response.json();
+                    // Update the email in our list with the content
+                    const idx = this.emailsData.emails.findIndex(e => e.id === email.id);
+                    if (idx !== -1) {
+                        this.emailsData.emails[idx].body_full = data.content;
+                        this.emailsData.emails[idx].body_snippet = data.content?.substring(0, 200) || '';
+                    }
+                    // Also update selectedEmail reference
+                    if (this.selectedEmail?.id === email.id) {
+                        this.selectedEmail.body_full = data.content;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch email content:', err);
+            } finally {
+                this.loadingEmailContent = null;
+            }
+        },
+
         async loadEmails(includeHistory = false) {
             if (this.emailsLoading) return;
 
