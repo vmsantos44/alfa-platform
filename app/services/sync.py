@@ -1300,6 +1300,10 @@ class SyncService:
         raw_content_original = data.get("Note_Content") or ""
         raw_content = cls.strip_html(raw_content_original)
 
+        # Log if HTML was stripped (for debugging)
+        if raw_content != raw_content_original:
+            print(f"📝 Stripped HTML from note {zoho_note_id}: {len(raw_content_original)} -> {len(raw_content)} chars")
+
         # Get parent (candidate) info
         parent_id_data = data.get("Parent_Id")
         zoho_candidate_id = None
