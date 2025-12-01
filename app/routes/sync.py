@@ -258,9 +258,9 @@ async def debug_zoho_bookings():
                 "instructions": "Add ZOHO_BOOKINGS_CLIENT_ID, ZOHO_BOOKINGS_CLIENT_SECRET, and ZOHO_BOOKINGS_REFRESH_TOKEN to .env"
             }
 
-        # Fetch bookings from last 30 days
-        to_date = datetime.utcnow()
-        from_date = to_date - timedelta(days=30)
+        # Fetch bookings from last 90 days AND next 30 days
+        from_date = datetime.utcnow() - timedelta(days=90)
+        to_date = datetime.utcnow() + timedelta(days=30)
 
         result = await bookings_api.fetch_appointments(
             from_date=from_date,
