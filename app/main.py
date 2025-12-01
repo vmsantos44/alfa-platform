@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import HOST, PORT, DEBUG
-from app.routes import chat, api, webhooks
+from app.routes import chat, api, webhooks, oauth
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
+app.include_router(oauth.router, prefix="/oauth", tags=["OAuth"])
 
 
 # Health check endpoint
