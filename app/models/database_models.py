@@ -295,7 +295,7 @@ class SyncLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     sync_type: Mapped[str] = mapped_column(String(50), index=True)
-    # types: candidates, interviews, tasks, full_sync
+    # types: candidates, interviews, tasks, notes, full_sync
 
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -313,3 +313,35 @@ class SyncLog(Base):
 
     def __repr__(self):
         return f"<SyncLog {self.sync_type} @ {self.started_at}>"
+
+
+class CrmNote(Base):
+    """
+    Notes synced from Zoho CRM.
+    Stores both raw content and summarized version for efficient dashboard display.
+    """
+    __tablename__ = "crm_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    zoho_note_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+
+    # Related candidate (Zoho ID, since notes link to Leads/Contacts)
+    zoho_candidate_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    parent_module: Mapped[str] = mapped_column(String(20), default="Leads")  # Leads or Contacts
+
+    # Note content
+    title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    raw_content: Mapped[str] = mapped_column(Text)  # Full note text from CRM
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Summarized version
+
+    # Metadata from Zoho
+    created_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    zoho_created_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    zoho_modified_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+
+    # Local timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<CrmNote {self.zoho_note_id} for {self.zoho_candidate_id}>"

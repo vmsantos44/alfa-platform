@@ -228,6 +228,55 @@ class ZohoAPI:
             raise Exception(f"Failed to get notes: {str(e)}")
 
     @api_retry
+    async def get_all_notes(
+        self,
+        page: int = 1,
+        per_page: int = 200,
+        modified_since: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get all notes from Zoho CRM Notes module.
+
+        Args:
+            page: Page number (starts at 1)
+            per_page: Records per page (max 200)
+            modified_since: ISO timestamp to fetch only notes modified after this time
+                           Format: 2024-01-01T00:00:00+00:00
+
+        Returns:
+            Dict with 'data' list and 'info' pagination details
+        """
+        headers = await self._get_headers()
+
+        # Add If-Modified-Since header for incremental sync
+        if modified_since:
+            headers["If-Modified-Since"] = modified_since
+
+        params = {
+            "page": page,
+            "per_page": min(per_page, 200),
+            "fields": "id,Note_Title,Note_Content,Parent_Id,$se_module,Owner,Created_Time,Modified_Time"
+        }
+
+        try:
+            response = await self.client.get(
+                f"{self.settings.zoho_api_domain}/crm/v2/Notes",
+                headers=headers,
+                params=params,
+            )
+
+            # Handle 204 No Content (no records) or 304 Not Modified
+            if response.status_code in (204, 304):
+                return {"data": [], "info": {"more_records": False}}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, "response") and e.response.status_code in (204, 304):
+                return {"data": [], "info": {"more_records": False}}
+            raise Exception(f"Failed to get all notes: {str(e)}")
+
+    @api_retry
     async def get_activities(self, module: str, record_id: str) -> Dict[str, Any]:
         """Get all activities (emails, calls, tasks, events) for a record"""
         headers = await self._get_headers()

@@ -1057,3 +1057,275 @@ class SyncService:
             )
             sync_log = result.scalar_one_or_none()
             return sync_log.completed_at if sync_log else None
+
+    # ========================================================================
+    # NOTES SYNC
+    # ========================================================================
+
+    @classmethod
+    def summarize_note(cls, content: str, max_length: int = 200) -> str:
+        """
+        Summarize note content using a simple heuristic approach.
+        Extracts first sentence + last sentence if different, or truncates with ellipsis.
+
+        Args:
+            content: Raw note content
+            max_length: Maximum length of summary
+
+        Returns:
+            Summarized text
+        """
+        if not content:
+            return ""
+
+        # Clean up whitespace
+        content = content.strip()
+
+        # If already short enough, return as-is
+        if len(content) <= max_length:
+            return content
+
+        # Split into sentences (simple heuristic)
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', content)
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        if not sentences:
+            # No clear sentences, just truncate
+            return content[:max_length - 3].rsplit(' ', 1)[0] + "..."
+
+        first_sentence = sentences[0]
+
+        # If just one sentence or first is long enough
+        if len(sentences) == 1 or len(first_sentence) >= max_length - 20:
+            if len(first_sentence) <= max_length:
+                return first_sentence
+            return first_sentence[:max_length - 3].rsplit(' ', 1)[0] + "..."
+
+        # Try to include first and last sentence
+        last_sentence = sentences[-1]
+
+        # Avoid duplicating if first == last
+        if first_sentence == last_sentence:
+            if len(first_sentence) <= max_length:
+                return first_sentence
+            return first_sentence[:max_length - 3].rsplit(' ', 1)[0] + "..."
+
+        combined = f"{first_sentence} [...] {last_sentence}"
+        if len(combined) <= max_length:
+            return combined
+
+        # Just use first sentence with truncation if needed
+        if len(first_sentence) <= max_length:
+            return first_sentence
+        return first_sentence[:max_length - 3].rsplit(' ', 1)[0] + "..."
+
+    @classmethod
+    async def sync_notes_from_zoho(cls, full_sync: bool = False) -> Dict[str, Any]:
+        """
+        Sync notes from Zoho CRM Notes module to local database.
+        Uses modified_since for incremental sync unless full_sync is True.
+
+        Args:
+            full_sync: If True, fetch all notes regardless of last sync time
+
+        Returns:
+            Dict with sync statistics
+        """
+        from app.models.database_models import CrmNote
+
+        print("📝 Starting notes sync from Zoho CRM...")
+
+        async with async_session() as db:
+            # Create sync log
+            sync_log = SyncLog(
+                sync_type="notes",
+                status="running",
+                started_at=datetime.utcnow()
+            )
+            db.add(sync_log)
+            await db.commit()
+
+            stats = {
+                "records_processed": 0,
+                "records_created": 0,
+                "records_updated": 0,
+                "errors": 0,
+                "error_details": []
+            }
+
+            try:
+                crm = ZohoCRM()
+
+                # Get last sync time for incremental sync
+                modified_since = None
+                if not full_sync:
+                    last_sync = await cls.get_last_notes_sync()
+                    if last_sync:
+                        # Format as ISO string for Zoho API
+                        modified_since = last_sync.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+                        print(f"📝 Incremental sync since: {modified_since}")
+                    else:
+                        print("📝 No previous sync found, performing full sync")
+                else:
+                    print("📝 Full sync requested")
+
+                page = 1
+                per_page = 200
+
+                while True:
+                    try:
+                        print(f"📝 Fetching notes page {page}...")
+
+                        response = await crm.get_all_notes(
+                            page=page,
+                            per_page=per_page,
+                            modified_since=modified_since
+                        )
+
+                        notes = response.get("data", [])
+                        if not notes:
+                            break
+
+                        for note_data in notes:
+                            try:
+                                created = await cls._upsert_note_from_zoho(db, note_data)
+                                stats["records_processed"] += 1
+                                if created:
+                                    stats["records_created"] += 1
+                                else:
+                                    stats["records_updated"] += 1
+                            except Exception as e:
+                                print(f"⚠️ Error processing note {note_data.get('id')}: {e}")
+                                stats["errors"] += 1
+                                stats["error_details"].append(str(e))
+
+                        # Commit each page
+                        await db.commit()
+
+                        # Check for more pages
+                        info = response.get("info", {})
+                        if not info.get("more_records", False):
+                            break
+
+                        page += 1
+
+                        # Safety limit
+                        if page > 100:
+                            print("⚠️ Reached page limit (100)")
+                            break
+
+                    except Exception as e:
+                        print(f"❌ Error fetching notes page {page}: {e}")
+                        stats["errors"] += 1
+                        stats["error_details"].append(f"Page {page}: {str(e)}")
+                        break
+
+                # Mark sync as completed
+                sync_log.status = "completed"
+                sync_log.completed_at = datetime.utcnow()
+                sync_log.records_processed = stats["records_processed"]
+                sync_log.records_created = stats["records_created"]
+                sync_log.records_updated = stats["records_updated"]
+                sync_log.errors = stats["errors"]
+
+                await db.commit()
+
+                print(f"✅ Notes sync complete: {stats['records_processed']} processed, "
+                      f"{stats['records_created']} created, {stats['records_updated']} updated")
+
+            except Exception as e:
+                sync_log.status = "failed"
+                sync_log.error_message = str(e)[:500]
+                sync_log.completed_at = datetime.utcnow()
+                await db.commit()
+                raise
+
+            return stats
+
+    @classmethod
+    async def _upsert_note_from_zoho(cls, db: AsyncSession, data: Dict[str, Any]) -> bool:
+        """
+        Insert or update a CRM note from Zoho data.
+
+        Returns:
+            True if created, False if updated
+        """
+        from app.models.database_models import CrmNote
+
+        zoho_note_id = str(data.get("id", ""))
+        if not zoho_note_id:
+            return False
+
+        # Check if exists
+        result = await db.execute(
+            select(CrmNote).where(CrmNote.zoho_note_id == zoho_note_id)
+        )
+        existing = result.scalar_one_or_none()
+
+        # Parse data
+        title = data.get("Note_Title") or ""
+        raw_content = data.get("Note_Content") or ""
+
+        # Get parent (candidate) info
+        parent_id_data = data.get("Parent_Id")
+        zoho_candidate_id = None
+        if parent_id_data:
+            if isinstance(parent_id_data, dict):
+                zoho_candidate_id = parent_id_data.get("id")
+            else:
+                zoho_candidate_id = str(parent_id_data)
+
+        parent_module = data.get("$se_module", "Leads")
+
+        # Get owner info
+        owner_data = data.get("Owner", {})
+        created_by = owner_data.get("name") if isinstance(owner_data, dict) else str(owner_data) if owner_data else None
+
+        # Parse dates
+        created_time = cls._parse_datetime(data.get("Created_Time"))
+        modified_time = cls._parse_datetime(data.get("Modified_Time"))
+
+        # Generate summary
+        summary = cls.summarize_note(raw_content)
+
+        if existing:
+            # Update existing note
+            existing.title = title
+            existing.raw_content = raw_content
+            existing.summary = summary
+            existing.zoho_candidate_id = zoho_candidate_id
+            existing.parent_module = parent_module
+            existing.created_by = created_by
+            existing.zoho_created_time = created_time
+            existing.zoho_modified_time = modified_time
+            existing.updated_at = datetime.utcnow()
+            return False
+        else:
+            # Create new note
+            new_note = CrmNote(
+                zoho_note_id=zoho_note_id,
+                zoho_candidate_id=zoho_candidate_id,
+                parent_module=parent_module,
+                title=title,
+                raw_content=raw_content,
+                summary=summary,
+                created_by=created_by,
+                zoho_created_time=created_time,
+                zoho_modified_time=modified_time
+            )
+            db.add(new_note)
+            return True
+
+    @classmethod
+    async def get_last_notes_sync(cls) -> Optional[datetime]:
+        """Get the timestamp of the last successful notes sync"""
+        async with async_session() as db:
+            result = await db.execute(
+                select(SyncLog)
+                .where(SyncLog.sync_type == "notes", SyncLog.status == "completed")
+                .order_by(SyncLog.completed_at.desc())
+                .limit(1)
+            )
+            sync_log = result.scalar_one_or_none()
+            return sync_log.completed_at if sync_log else None

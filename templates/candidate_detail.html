@@ -133,7 +133,7 @@
                     class="px-6 py-4 font-medium transition-colors"
                 >
                     Notes
-                    <span x-show="candidate.notes?.length" class="ml-1 bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="candidate.notes?.length"></span>
+                    <span x-show="(candidate.notes?.length || 0) + (candidate.crm_notes?.length || 0) > 0" class="ml-1 bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="(candidate.notes?.length || 0) + (candidate.crm_notes?.length || 0)"></span>
                 </button>
                 <button
                     @click="activeTab = 'documents'"
@@ -512,42 +512,75 @@
                         </div>
                     </div>
 
-                    <!-- Notes List -->
-                    <div x-show="candidate.notes?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
-                        No notes yet. Add one above.
-                    </div>
-                    <div class="space-y-4">
-                        <template x-for="note in candidate.notes" :key="note.id">
-                            <div class="bg-gray-50 rounded-lg p-4">
-                                <div class="flex items-start justify-between mb-2">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="px-2 py-0.5 text-xs rounded-full"
-                                            :class="{
-                                                'bg-gray-200 text-gray-700': note.note_type === 'general',
-                                                'bg-blue-100 text-blue-700': note.note_type === 'interview',
-                                                'bg-purple-100 text-purple-700': note.note_type === 'assessment',
-                                                'bg-yellow-100 text-yellow-700': note.note_type === 'follow_up',
-                                                'bg-green-100 text-green-700': note.note_type === 'document'
-                                            }"
-                                            x-text="note.note_type"
-                                        ></span>
-                                        <span class="text-xs text-gray-500" x-text="formatDateTime(note.created_at)"></span>
-                                        <span x-show="note.created_by" class="text-xs text-gray-400" x-text="'by ' + note.created_by"></span>
+                    <!-- Platform Notes List -->
+                    <div x-show="candidate.notes?.length > 0" class="mb-6">
+                        <h3 class="font-semibold text-gray-800 mb-3">Platform Notes</h3>
+                        <div class="space-y-4">
+                            <template x-for="note in candidate.notes" :key="note.id">
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span
+                                                class="px-2 py-0.5 text-xs rounded-full"
+                                                :class="{
+                                                    'bg-gray-200 text-gray-700': note.note_type === 'general',
+                                                    'bg-blue-100 text-blue-700': note.note_type === 'interview',
+                                                    'bg-purple-100 text-purple-700': note.note_type === 'assessment',
+                                                    'bg-yellow-100 text-yellow-700': note.note_type === 'follow_up',
+                                                    'bg-green-100 text-green-700': note.note_type === 'document'
+                                                }"
+                                                x-text="note.note_type"
+                                            ></span>
+                                            <span class="text-xs text-gray-500" x-text="formatDateTime(note.created_at)"></span>
+                                            <span x-show="note.created_by" class="text-xs text-gray-400" x-text="'by ' + note.created_by"></span>
+                                        </div>
+                                        <button
+                                            @click="deleteNote(note.id)"
+                                            class="p-1 text-gray-400 hover:text-red-500"
+                                            title="Delete note"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                        </button>
                                     </div>
-                                    <button
-                                        @click="deleteNote(note.id)"
-                                        class="p-1 text-gray-400 hover:text-red-500"
-                                        title="Delete note"
-                                    >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
-                                    </button>
+                                    <p class="text-gray-800 whitespace-pre-wrap" x-text="note.content"></p>
                                 </div>
-                                <p class="text-gray-800 whitespace-pre-wrap" x-text="note.content"></p>
-                            </div>
-                        </template>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- CRM Notes (synced from Zoho) -->
+                    <div x-show="candidate.crm_notes?.length > 0">
+                        <h3 class="font-semibold text-gray-800 mb-3">CRM Notes</h3>
+                        <div class="space-y-4">
+                            <template x-for="note in candidate.crm_notes" :key="note.id">
+                                <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">CRM</span>
+                                            <span x-show="note.title" class="text-sm font-medium text-gray-700" x-text="note.title"></span>
+                                            <span class="text-xs text-gray-500" x-text="formatDateTime(note.zoho_created_time)"></span>
+                                            <span x-show="note.created_by" class="text-xs text-gray-400" x-text="'by ' + note.created_by"></span>
+                                        </div>
+                                    </div>
+                                    <!-- Show summary by default -->
+                                    <p class="text-gray-800" x-text="note.summary || note.raw_content"></p>
+                                    <!-- Expand to show full content if different from summary -->
+                                    <template x-if="note.summary && note.summary !== note.raw_content">
+                                        <details class="mt-2">
+                                            <summary class="text-xs text-blue-600 cursor-pointer hover:text-blue-800">Show full note</summary>
+                                            <p class="mt-2 text-gray-700 text-sm whitespace-pre-wrap bg-white p-2 rounded" x-text="note.raw_content"></p>
+                                        </details>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div x-show="candidate.notes?.length === 0 && candidate.crm_notes?.length === 0" class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">
+                        No notes yet. Add one above.
                     </div>
                 </div>
 

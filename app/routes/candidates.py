@@ -9,13 +9,14 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.database_models import CandidateCache, ActionAlert, Interview, Task, CandidateNote
+from app.models.database_models import CandidateCache, ActionAlert, Interview, Task, CandidateNote, CrmNote
 from app.models.schemas import (
     CandidateResponse,
     CandidateSummary,
     CandidateDetailResponse,
     CandidateNoteCreate,
     CandidateNoteResponse,
+    CrmNoteResponse,
     PipelineStage,
     SuccessResponse,
     InterviewResponse,
@@ -527,6 +528,28 @@ async def get_candidate_detail(
         for t in tasks_result.scalars().all()
     ]
 
+    # Fetch CRM notes (synced from Zoho, match by zoho_candidate_id)
+    crm_notes_result = await db.execute(
+        select(CrmNote)
+        .where(CrmNote.zoho_candidate_id == candidate.zoho_id)
+        .order_by(CrmNote.zoho_created_time.desc())
+    )
+    crm_notes = [
+        CrmNoteResponse(
+            id=n.id,
+            zoho_note_id=n.zoho_note_id,
+            zoho_candidate_id=n.zoho_candidate_id,
+            parent_module=n.parent_module,
+            title=n.title,
+            summary=n.summary,
+            raw_content=n.raw_content,
+            created_by=n.created_by,
+            zoho_created_time=n.zoho_created_time,
+            zoho_modified_time=n.zoho_modified_time
+        )
+        for n in crm_notes_result.scalars().all()
+    ]
+
     return CandidateDetailResponse(
         id=candidate.id,
         zoho_id=candidate.zoho_id,
@@ -580,6 +603,7 @@ async def get_candidate_detail(
         updated_at=candidate.updated_at,
         zoho_created_time=candidate.zoho_created_time,
         notes=notes,
+        crm_notes=crm_notes,
         interviews=interviews,
         tasks=tasks
     )
@@ -829,3 +853,93 @@ async def flag_pending_documents(
 
     status = "flagged with pending documents" if pending else "documents cleared"
     return SuccessResponse(message=f"Candidate {status}")
+
+
+# ============================================
+# CRM Notes Search
+# ============================================
+
+@router.get("/notes/search", response_model=List[CrmNoteResponse])
+async def search_crm_notes(
+    q: str = Query(..., min_length=2, description="Search query (searches raw note content)"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum results to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Search CRM notes by keyword.
+    Searches the raw_content field for matching terms.
+    Returns notes with candidate information.
+    """
+    # Search in raw_content (case-insensitive via LIKE)
+    search_term = f"%{q}%"
+    result = await db.execute(
+        select(CrmNote)
+        .where(
+            or_(
+                CrmNote.raw_content.ilike(search_term),
+                CrmNote.title.ilike(search_term)
+            )
+        )
+        .order_by(CrmNote.zoho_created_time.desc())
+        .limit(limit)
+    )
+    notes = result.scalars().all()
+
+    return [
+        CrmNoteResponse(
+            id=n.id,
+            zoho_note_id=n.zoho_note_id,
+            zoho_candidate_id=n.zoho_candidate_id,
+            parent_module=n.parent_module,
+            title=n.title,
+            summary=n.summary,
+            raw_content=n.raw_content,
+            created_by=n.created_by,
+            zoho_created_time=n.zoho_created_time,
+            zoho_modified_time=n.zoho_modified_time
+        )
+        for n in notes
+    ]
+
+
+@router.get("/{candidate_id}/crm-notes", response_model=List[CrmNoteResponse])
+async def get_candidate_crm_notes(
+    candidate_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all CRM notes for a specific candidate.
+    Notes are synced from Zoho CRM and stored locally.
+    """
+    # Get candidate to find zoho_id
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Fetch CRM notes for this candidate
+    result = await db.execute(
+        select(CrmNote)
+        .where(CrmNote.zoho_candidate_id == candidate.zoho_id)
+        .order_by(CrmNote.zoho_created_time.desc())
+    )
+    notes = result.scalars().all()
+
+    return [
+        CrmNoteResponse(
+            id=n.id,
+            zoho_note_id=n.zoho_note_id,
+            zoho_candidate_id=n.zoho_candidate_id,
+            parent_module=n.parent_module,
+            title=n.title,
+            summary=n.summary,
+            raw_content=n.raw_content,
+            created_by=n.created_by,
+            zoho_created_time=n.zoho_created_time,
+            zoho_modified_time=n.zoho_modified_time
+        )
+        for n in notes
+    ]
