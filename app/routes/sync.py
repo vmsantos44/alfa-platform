@@ -230,3 +230,52 @@ async def debug_zoho_events():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug events failed: {str(e)}")
+
+
+@router.get("/debug-bookings")
+async def debug_zoho_bookings():
+    """
+    Debug endpoint to see raw Zoho Bookings data.
+    Shows actual booking appointments with their status (COMPLETED, NO_SHOW, etc.)
+    """
+    from app.integrations.zoho.crm import ZohoCRM
+    from datetime import datetime, timedelta
+
+    try:
+        crm = ZohoCRM()
+
+        # Fetch bookings from last 30 days
+        to_date = datetime.utcnow()
+        from_date = to_date - timedelta(days=30)
+
+        response = await crm.get_bookings(
+            from_date=from_date,
+            to_date=to_date,
+            page=1,
+            per_page=50
+        )
+
+        # Parse the response - Zoho Bookings has nested structure
+        bookings = []
+        if "response" in response:
+            return_value = response.get("response", {}).get("returnvalue", {})
+            if isinstance(return_value, dict):
+                bookings = return_value.get("data", [])
+            elif isinstance(return_value, list):
+                bookings = return_value
+
+        # Count by status
+        status_counts = {}
+        for booking in bookings:
+            status = booking.get("status", "UNKNOWN")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+        return {
+            "total_bookings": len(bookings),
+            "status_counts": status_counts,
+            "sample_bookings": bookings[:5],
+            "next_page_available": response.get("next_page_available", False),
+            "raw_response_keys": list(response.keys()) if response else []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug bookings failed: {str(e)}")

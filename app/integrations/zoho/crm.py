@@ -310,6 +310,96 @@ class ZohoAPI:
         except httpx.HTTPError as e:
             raise Exception(f"Failed to send email: {str(e)}")
 
+    # =========================================================================
+    # ZOHO BOOKINGS API
+    # =========================================================================
+
+    @api_retry
+    async def get_bookings(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+        status: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Fetch appointments from Zoho Bookings.
+
+        Args:
+            from_date: Start date for appointments
+            to_date: End date for appointments
+            status: Filter by status (UPCOMING, COMPLETED, NO_SHOW, CANCEL, etc.)
+            page: Page number
+            per_page: Results per page (max 50)
+
+        Returns:
+            Dict with bookings data and pagination info
+
+        Status values: UPCOMING, CANCEL, ONGOING, PENDING, COMPLETED,
+                      NO_SHOW, PENDING_PAYMENT, PAYMENT_FAILURE
+        """
+        headers = await self._get_headers()
+        headers["Content-Type"] = "application/json"
+
+        # Format dates as expected by Zoho Bookings API: dd-MMM-yyyy
+        from_str = from_date.strftime("%d-%b-%Y")
+        to_str = to_date.strftime("%d-%b-%Y")
+
+        payload = {
+            "from_time": from_str,
+            "to_time": to_str,
+            "page": page,
+            "per_page": min(per_page, 50)
+        }
+
+        if status:
+            payload["status"] = status
+
+        try:
+            response = await self.client.post(
+                f"{self.settings.zoho_api_domain}/bookings/v1/json/fetchappointment",
+                headers=headers,
+                json=payload
+            )
+
+            # Handle 204 No Content
+            if response.status_code == 204:
+                return {"response": {"returnvalue": {"data": []}}, "next_page_available": False}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, 'response') and e.response:
+                error_text = e.response.text[:500] if e.response.text else ""
+                raise Exception(f"Failed to fetch bookings: {str(e)} - {error_text}")
+            raise Exception(f"Failed to fetch bookings: {str(e)}")
+
+    @api_retry
+    async def get_booking_by_id(self, booking_id: str) -> Dict[str, Any]:
+        """
+        Get a specific booking/appointment by ID.
+
+        Args:
+            booking_id: The booking ID (e.g., RE-12727)
+
+        Returns:
+            Dict with booking details
+        """
+        headers = await self._get_headers()
+        headers["Content-Type"] = "application/json"
+
+        try:
+            response = await self.client.post(
+                f"{self.settings.zoho_api_domain}/bookings/v1/json/getappointment",
+                headers=headers,
+                json={"booking_id": booking_id}
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise Exception(f"Failed to get booking {booking_id}: {str(e)}")
+
     async def close(self):
         """Close HTTP client"""
         await self.client.aclose()
