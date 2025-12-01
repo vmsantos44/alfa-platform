@@ -535,18 +535,7 @@ async def get_candidate_detail(
         .order_by(CrmNote.zoho_created_time.desc())
     )
     crm_notes = [
-        CrmNoteResponse(
-            id=n.id,
-            zoho_note_id=n.zoho_note_id,
-            zoho_candidate_id=n.zoho_candidate_id,
-            parent_module=n.parent_module,
-            title=n.title,
-            summary=n.summary,
-            raw_content=n.raw_content,
-            created_by=n.created_by,
-            zoho_created_time=n.zoho_created_time,
-            zoho_modified_time=n.zoho_modified_time
-        )
+        CrmNoteResponse.from_orm_with_phrases(n)
         for n in crm_notes_result.scalars().all()
     ]
 
@@ -885,21 +874,7 @@ async def search_crm_notes(
     )
     notes = result.scalars().all()
 
-    return [
-        CrmNoteResponse(
-            id=n.id,
-            zoho_note_id=n.zoho_note_id,
-            zoho_candidate_id=n.zoho_candidate_id,
-            parent_module=n.parent_module,
-            title=n.title,
-            summary=n.summary,
-            raw_content=n.raw_content,
-            created_by=n.created_by,
-            zoho_created_time=n.zoho_created_time,
-            zoho_modified_time=n.zoho_modified_time
-        )
-        for n in notes
-    ]
+    return [CrmNoteResponse.from_orm_with_phrases(n) for n in notes]
 
 
 @router.get("/{candidate_id}/crm-notes", response_model=List[CrmNoteResponse])
@@ -928,18 +903,4 @@ async def get_candidate_crm_notes(
     )
     notes = result.scalars().all()
 
-    return [
-        CrmNoteResponse(
-            id=n.id,
-            zoho_note_id=n.zoho_note_id,
-            zoho_candidate_id=n.zoho_candidate_id,
-            parent_module=n.parent_module,
-            title=n.title,
-            summary=n.summary,
-            raw_content=n.raw_content,
-            created_by=n.created_by,
-            zoho_created_time=n.zoho_created_time,
-            zoho_modified_time=n.zoho_modified_time
-        )
-        for n in notes
-    ]
+    return [CrmNoteResponse.from_orm_with_phrases(n) for n in notes]
