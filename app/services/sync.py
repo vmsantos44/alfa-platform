@@ -1065,47 +1065,43 @@ class SyncService:
     @classmethod
     def strip_html(cls, content: str) -> str:
         """
-        Remove HTML tags from content and clean up whitespace.
+        Convert HTML to clean plain text using html2text library.
 
         Args:
             content: Text that may contain HTML tags
 
         Returns:
-            Plain text with HTML removed
+            Plain text with HTML converted to readable format
         """
         if not content:
             return ""
 
+        import html2text
         import re
 
-        # Remove script and style elements entirely (including content)
-        text = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Configure html2text for clean output
+        h = html2text.HTML2Text()
+        h.ignore_links = True
+        h.ignore_images = True
+        h.ignore_emphasis = True
+        h.ignore_tables = False
+        h.body_width = 0  # Don't wrap lines
+        h.unicode_snob = True  # Use unicode instead of ASCII
 
-        # Remove HTML comments
-        text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
-
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-
-        # Decode common HTML entities
-        text = text.replace('&nbsp;', ' ')
-        text = text.replace('&amp;', '&')
-        text = text.replace('&lt;', '<')
-        text = text.replace('&gt;', '>')
-        text = text.replace('&quot;', '"')
-        text = text.replace('&#39;', "'")
-        text = text.replace('&rsquo;', "'")
-        text = text.replace('&lsquo;', "'")
-        text = text.replace('&rdquo;', '"')
-        text = text.replace('&ldquo;', '"')
-        text = text.replace('&mdash;', '—')
-        text = text.replace('&ndash;', '–')
-
-        # Normalize whitespace
-        text = re.sub(r'\s+', ' ', text)
-
-        return text.strip()
+        try:
+            # Convert HTML to text
+            text = h.handle(content)
+            # Clean up extra whitespace and newlines
+            text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 newlines
+            text = re.sub(r'[ \t]+', ' ', text)  # Normalize spaces
+            return text.strip()
+        except Exception:
+            # Fallback to simple regex stripping
+            text = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<[^>]+>', '', text)
+            text = re.sub(r'\s+', ' ', text)
+            return text.strip()
 
     @classmethod
     def summarize_note(cls, content: str, max_length: int = 200) -> str:
@@ -1780,8 +1776,11 @@ class SyncService:
         subject = data.get("subject") or data.get("Subject") or ""
 
         # Body - Zoho doesn't include body in list response, only snippet
-        body_snippet = data.get("snippet") or ""
+        # The snippet may contain HTML, so convert to plain text
+        raw_snippet = data.get("snippet") or ""
+        body_snippet = cls.strip_html(raw_snippet)[:500] if raw_snippet else ""
         body_full = ""  # Would need separate API call for full body
+        html_body = ""  # Will be set when fetching full email content
 
         # Parse sent date - Zoho uses 'sent_time' for emails
         sent_at = cls._parse_email_datetime(
@@ -1819,7 +1818,11 @@ class SyncService:
             existing.cc_address = cc_address
             existing.subject = subject
             existing.body_snippet = body_snippet
-            existing.body_full = body_full
+            # Don't overwrite body_full/html_body if already populated (from content fetch)
+            if not existing.body_full:
+                existing.body_full = body_full
+            if not existing.html_body:
+                existing.html_body = html_body
             existing.sent_at = sent_at
             existing.direction = direction
             existing.has_attachment = has_attachment
@@ -1840,6 +1843,7 @@ class SyncService:
                 subject=subject,
                 body_snippet=body_snippet,
                 body_full=body_full,
+                html_body=html_body,
                 sent_at=sent_at,
                 has_attachment=has_attachment,
                 message_id=message_id,

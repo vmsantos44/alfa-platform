@@ -996,6 +996,7 @@ async def get_candidate_emails(
             subject=e.subject,
             body_snippet=e.body_snippet,
             body_full=e.body_full,
+            html_body=e.html_body,
             sent_at=e.sent_at,
             has_attachment=e.has_attachment,
             message_id=e.message_id,
@@ -1059,6 +1060,7 @@ async def get_candidate_email_detail(
         subject=email.subject,
         body_snippet=email.body_snippet,
         body_full=email.body_full,
+        html_body=email.html_body,
         sent_at=email.sent_at,
         has_attachment=email.has_attachment,
         message_id=email.message_id,
@@ -1103,17 +1105,14 @@ async def get_email_content(
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    # If we already have HTML content cached, return it
-    if email.body_full:
-        is_html = email.body_full.strip().startswith('<') or '<html' in email.body_full.lower()
-        if is_html:
-            return {
-                "id": email.id,
-                "content": email.body_snippet or SyncService.strip_html(email.body_full)[:200],
-                "html_content": email.body_full,
-                "cached": True
-            }
-        # If cached as plain text, re-fetch to get HTML
+    # If we already have content cached, return it
+    if email.html_body and email.body_full:
+        return {
+            "id": email.id,
+            "content": email.body_full,  # Plain text
+            "html_content": email.html_body,  # Original HTML for iframe
+            "cached": True
+        }
 
     # Fetch content from Zoho
     from app.integrations.zoho.crm import ZohoCRM
@@ -1127,13 +1126,14 @@ async def get_email_content(
             message_id=email.message_id
         )
 
-        # Extract content - keep HTML for rendering, create plain text snippet
+        # Extract content - keep HTML for rendering, convert to plain text
         html_content = email_data.get("content") or email_data.get("Content") or ""
         plain_content = SyncService.strip_html(html_content) if html_content else ""
 
         if html_content:
-            # Cache both HTML and plain text
-            email.body_full = html_content  # Store original HTML
+            # Cache both HTML and plain text separately
+            email.html_body = html_content  # Store original HTML
+            email.body_full = plain_content  # Store converted plain text
             email.body_snippet = plain_content[:200] if plain_content else ""
             await db.commit()
 

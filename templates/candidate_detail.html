@@ -715,7 +715,7 @@
                                                     </span>
                                                 </div>
                                                 <p class="text-sm text-gray-600 truncate" x-text="email.subject || '(No subject)'"></p>
-                                                <p class="text-xs text-gray-400 truncate mt-0.5" x-text="stripHtml(email.body_snippet)"></p>
+                                                <p class="text-xs text-gray-400 truncate mt-0.5" x-text="email.body_snippet || ''"></p>
                                             </div>
 
                                             <!-- Date & Arrow -->
@@ -835,17 +835,17 @@
                                 <div x-show="!loadingEmailContent" class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                                     <!-- HTML content in sandboxed iframe -->
                                     <iframe
-                                        x-show="selectedEmail?.html_content"
-                                        :srcdoc="selectedEmail?.html_content || ''"
+                                        x-show="selectedEmail?.html_body || selectedEmail?.html_content"
+                                        :srcdoc="selectedEmail?.html_body || selectedEmail?.html_content || ''"
                                         sandbox="allow-same-origin"
                                         class="w-full border-0"
                                         style="min-height: 300px; max-height: 400px;"
                                     ></iframe>
                                     <!-- Plain text fallback -->
                                     <div
-                                        x-show="!selectedEmail?.html_content"
+                                        x-show="!selectedEmail?.html_body && !selectedEmail?.html_content"
                                         class="p-4 text-gray-600 whitespace-pre-wrap leading-relaxed"
-                                        x-text="stripHtml(selectedEmail?.body_full || selectedEmail?.body_snippet || 'No content available')"
+                                        x-text="selectedEmail?.body_full || selectedEmail?.body_snippet || 'No content available'"
                                     ></div>
                                 </div>
                             </div>
@@ -1279,20 +1279,22 @@ function candidateDetailApp() {
                     // Update the email in our list with the content
                     const idx = this.emailsData.emails.findIndex(e => e.id === email.id);
                     if (idx !== -1) {
-                        this.emailsData.emails[idx].body_full = data.content;
-                        this.emailsData.emails[idx].html_content = data.html_content;
+                        this.emailsData.emails[idx].body_full = data.content;  // Plain text
+                        this.emailsData.emails[idx].html_body = data.html_content;  // HTML for iframe
+                        this.emailsData.emails[idx].html_content = data.html_content;  // Alias
                         this.emailsData.emails[idx].body_snippet = data.content?.substring(0, 200) || '';
                     }
                     // Also update selectedEmail - create new object to trigger reactivity
                     if (this.selectedEmail?.id === email.id) {
                         this.selectedEmail = {
                             ...this.selectedEmail,
-                            body_full: data.content,
-                            html_content: data.html_content
+                            body_full: data.content,  // Plain text
+                            html_body: data.html_content,  // HTML for iframe
+                            html_content: data.html_content  // Alias
                         };
                         console.log('Updated selectedEmail:', {
-                            hasHtmlContent: !!this.selectedEmail.html_content,
-                            htmlPreview: this.selectedEmail.html_content?.substring(0, 100)
+                            hasHtmlBody: !!this.selectedEmail.html_body,
+                            htmlPreview: this.selectedEmail.html_body?.substring(0, 100)
                         });
                     }
                 }
