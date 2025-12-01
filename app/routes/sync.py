@@ -240,6 +240,7 @@ async def debug_zoho_bookings():
     """
     from app.integrations.zoho.bookings import get_zoho_bookings
     from datetime import datetime, timedelta
+    import httpx
 
     try:
         bookings_api = await get_zoho_bookings()
@@ -258,8 +259,19 @@ async def debug_zoho_bookings():
                 "instructions": "Add ZOHO_BOOKINGS_CLIENT_ID, ZOHO_BOOKINGS_CLIENT_SECRET, and ZOHO_BOOKINGS_REFRESH_TOKEN to .env"
             }
 
-        # Fetch bookings from last 90 days AND next 30 days
-        from_date = datetime.utcnow() - timedelta(days=90)
+        # Try fetching with NO parameters (should return today's appointments per docs)
+        headers = await bookings_api._get_headers()
+
+        raw_response = await bookings_api.client.post(
+            "https://www.zohoapis.com/bookings/v1/json/fetchappointment",
+            headers=headers,
+            json={}  # Empty payload = today's appointments
+        )
+
+        raw_data = raw_response.json() if raw_response.status_code == 200 else {"error": raw_response.text}
+
+        # Also try with date range
+        from_date = datetime.utcnow() - timedelta(days=30)
         to_date = datetime.utcnow() + timedelta(days=30)
 
         result = await bookings_api.fetch_appointments(
@@ -282,7 +294,8 @@ async def debug_zoho_bookings():
             "total_bookings": len(appointments),
             "status_counts": status_counts,
             "sample_bookings": appointments[:5],
-            "next_page_available": result.get("next_page_available", False)
+            "next_page_available": result.get("next_page_available", False),
+            "raw_today_response": raw_data
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug bookings failed: {str(e)}")
