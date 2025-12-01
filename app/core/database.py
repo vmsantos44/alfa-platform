@@ -61,7 +61,27 @@ async def init_db():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Run migrations for new columns on existing tables
+        await _run_migrations(conn)
+
     print(f"✅ Database initialized at {DATABASE_PATH}")
+
+
+async def _run_migrations(conn):
+    """Add missing columns to existing tables (SQLite doesn't support ALTER COLUMN)"""
+    # Check if key_phrases column exists in crm_notes table
+    try:
+        result = await conn.execute(text("PRAGMA table_info(crm_notes)"))
+        columns = [row[1] for row in result.fetchall()]
+
+        if 'key_phrases' not in columns:
+            print("  📦 Adding key_phrases column to crm_notes table...")
+            await conn.execute(text("ALTER TABLE crm_notes ADD COLUMN key_phrases TEXT"))
+            print("  ✅ Migration complete: key_phrases column added")
+    except Exception as e:
+        # Table might not exist yet, that's fine
+        print(f"  ⚠️ Migration check: {e}")
 
 
 async def get_db() -> AsyncSession:
