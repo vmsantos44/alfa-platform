@@ -184,9 +184,27 @@ async def get_pipeline_metrics(
 # Recruiter Performance Report
 # ============================================
 
+@router.get("/recruiters")
+async def get_recruiters_list(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get list of all recruiters (candidate owners) for filter dropdown
+    """
+    result = await db.execute(
+        select(CandidateCache.candidate_owner)
+        .where(CandidateCache.candidate_owner.isnot(None))
+        .distinct()
+        .order_by(CandidateCache.candidate_owner)
+    )
+    recruiters = [row[0] for row in result.all()]
+    return {"recruiters": recruiters}
+
+
 @router.get("/recruiter-performance")
 async def get_recruiter_performance(
     days: int = Query(30, ge=7, le=365, description="Days to analyze"),
+    recruiter: Optional[str] = Query(None, description="Filter by recruiter name"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -197,21 +215,27 @@ async def get_recruiter_performance(
     """
     cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-    # Get all recruiters with their candidate counts
-    recruiters_result = await db.execute(
-        select(
-            CandidateCache.candidate_owner,
-            func.count(CandidateCache.id).label('total'),
-            func.sum(case((CandidateCache.stage == 'Active', 1), else_=0)).label('active'),
-            func.sum(case((CandidateCache.stage == 'Screening', 1), else_=0)).label('screening'),
-            func.sum(case((CandidateCache.stage.in_(['Interview Scheduled', 'Interview Completed']), 1), else_=0)).label('interviewing'),
-            func.sum(case((CandidateCache.stage == 'Onboarding', 1), else_=0)).label('onboarding'),
-            func.sum(case((CandidateCache.is_unresponsive == True, 1), else_=0)).label('unresponsive')
-        )
-        .where(CandidateCache.candidate_owner.isnot(None))
-        .group_by(CandidateCache.candidate_owner)
-        .order_by(func.count(CandidateCache.id).desc())
-    )
+    # Build query with optional recruiter filter
+    query = select(
+        CandidateCache.candidate_owner,
+        func.count(CandidateCache.id).label('total'),
+        func.sum(case((CandidateCache.stage == 'Active', 1), else_=0)).label('active'),
+        func.sum(case((CandidateCache.stage == 'Screening', 1), else_=0)).label('screening'),
+        func.sum(case((CandidateCache.stage.in_(['Interview Scheduled', 'Interview Completed']), 1), else_=0)).label('interviewing'),
+        func.sum(case((CandidateCache.stage == 'Onboarding', 1), else_=0)).label('onboarding'),
+        func.sum(case((CandidateCache.stage == 'New Candidate', 1), else_=0)).label('new_candidate'),
+        func.sum(case((CandidateCache.stage == 'Assessment', 1), else_=0)).label('assessment'),
+        func.sum(case((CandidateCache.stage == 'Inactive', 1), else_=0)).label('inactive'),
+        func.sum(case((CandidateCache.stage == 'Rejected', 1), else_=0)).label('rejected'),
+        func.sum(case((CandidateCache.is_unresponsive == True, 1), else_=0)).label('unresponsive')
+    ).where(CandidateCache.candidate_owner.isnot(None))
+
+    if recruiter:
+        query = query.where(CandidateCache.candidate_owner == recruiter)
+
+    query = query.group_by(CandidateCache.candidate_owner).order_by(func.count(CandidateCache.id).desc())
+
+    recruiters_result = await db.execute(query)
 
     recruiters = []
     for row in recruiters_result.all():
@@ -222,15 +246,20 @@ async def get_recruiter_performance(
             "name": row.candidate_owner,
             "total_candidates": total,
             "active": active,
+            "new_candidate": row.new_candidate or 0,
             "screening": row.screening or 0,
             "interviewing": row.interviewing or 0,
+            "assessment": row.assessment or 0,
             "onboarding": row.onboarding or 0,
+            "inactive": row.inactive or 0,
+            "rejected": row.rejected or 0,
             "unresponsive": row.unresponsive or 0,
             "activation_rate": round((active / total) * 100, 1) if total > 0 else 0
         })
 
     return {
         "period_days": days,
+        "filter_recruiter": recruiter,
         "recruiters": recruiters,
         "total_recruiters": len(recruiters)
     }
