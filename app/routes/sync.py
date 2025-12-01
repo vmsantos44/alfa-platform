@@ -418,6 +418,43 @@ async def debug_zoho_emails(
         }
 
 
+@router.get("/debug-email-content")
+async def debug_email_content(
+    zoho_id: str = Query(..., description="Zoho candidate/lead ID"),
+    message_id: str = Query(..., description="Email message ID"),
+    module: str = Query("Leads", description="Module (Leads or Contacts)")
+):
+    """
+    Debug endpoint to check raw Zoho CRM single email content.
+    """
+    from app.integrations.zoho.crm import ZohoCRM
+
+    try:
+        crm = ZohoCRM()
+
+        # Get single email content
+        response = await crm.get_email_content(
+            module=module,
+            record_id=zoho_id,
+            message_id=message_id
+        )
+
+        return {
+            "zoho_id": zoho_id,
+            "message_id": message_id,
+            "module": module,
+            "response": response,
+            "response_keys": list(response.keys()) if response else []
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "zoho_id": zoho_id,
+            "message_id": message_id,
+            "module": module
+        }
+
+
 @router.get("/debug-tasks")
 async def debug_zoho_tasks():
     """
