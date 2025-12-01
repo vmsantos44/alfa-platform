@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from app.config import HOST, PORT, DEBUG
 from app.core.database import init_db
-from app.routes import chat, api, webhooks, dashboard, candidates, sync, interviews, reports, tasks
+from app.routes import chat, api, webhooks, dashboard, candidates, sync, interviews, reports, tasks, alerts
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 # Template directory
@@ -71,6 +71,7 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 app.include_router(candidates.router, prefix="/api/candidates", tags=["Candidates"])
 app.include_router(interviews.router, prefix="/api/interviews", tags=["Interviews"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
