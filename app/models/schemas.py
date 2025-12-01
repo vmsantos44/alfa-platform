@@ -104,8 +104,10 @@ class CrmNoteResponse(BaseModel):
     def from_orm_with_phrases(cls, note):
         """Convert ORM object, parsing key_phrases from comma-separated string"""
         phrases = None
-        if note.key_phrases:
-            phrases = [p.strip() for p in note.key_phrases.split(',') if p.strip()]
+        # Handle case where key_phrases column may not exist yet (pre-migration)
+        key_phrases_str = getattr(note, 'key_phrases', None)
+        if key_phrases_str:
+            phrases = [p.strip() for p in key_phrases_str.split(',') if p.strip()]
         return cls(
             id=note.id,
             zoho_note_id=note.zoho_note_id,
