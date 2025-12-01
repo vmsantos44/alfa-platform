@@ -27,6 +27,8 @@ from app.models.schemas import (
     TaskResponse
 )
 from app.integrations.zoho.crm import get_crm_record_url
+from app.integrations.zoho.mail import get_mail_api
+from app.config import get_settings
 
 router = APIRouter()
 
@@ -1234,3 +1236,59 @@ async def sync_candidate_emails(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
+
+
+# ============================================
+# Zoho Mail Integration (Direct Mail API)
+# ============================================
+
+@router.get("/{candidate_id}/mail-history")
+async def get_candidate_mail_history(
+    candidate_id: int,
+    limit: int = Query(50, ge=1, le=200, description="Maximum emails to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get email history for a candidate from Zoho Mail.
+
+    This fetches emails directly from Zoho Mail (not CRM) based on candidate's email address.
+    Useful for seeing all email communication including emails not linked in CRM.
+
+    Returns sent and received emails with direction indicator.
+    """
+    settings = get_settings()
+
+    # Check if Zoho Mail is configured
+    if not settings.zoho_mail_refresh_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Zoho Mail not configured. Visit /oauth/authorize to set up."
+        )
+
+    # Get candidate email
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    if not candidate.email:
+        raise HTTPException(status_code=400, detail="Candidate has no email address")
+
+    try:
+        mail_api = await get_mail_api()
+        result = await mail_api.get_emails_by_contact(candidate.email, limit=limit)
+
+        # Format the response with candidate context
+        return {
+            "candidate_id": candidate.id,
+            "candidate_name": candidate.full_name,
+            "candidate_email": candidate.email,
+            "emails": result.get("data", []),
+            "total_count": result.get("count", 0),
+            "source": "zoho_mail"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch mail history: {str(e)}")
