@@ -64,10 +64,10 @@ class SyncService:
         "Invited for Upcoming Training": "Onboarding",
         "Booked for training": "Onboarding",
         "On training": "Onboarding",
-        "Training Completed": "Onboarding",
-        "Failed Training": "Onboarding",
-        "Training No Show": "Onboarding",
-        "Failed Onboarding": "Onboarding",
+        "Training Completed": "Active",  # Completed training = now active
+        "Failed Training": "Inactive",
+        "Training No Show": "Inactive",
+        "Failed Onboarding": "Inactive",
         "Waiting for System Specs Approval": "Onboarding",
         "Invited to AlfaOne": "Onboarding",
 
