@@ -136,6 +136,14 @@
                     <span x-show="(candidate.notes?.length || 0) + (candidate.crm_notes?.length || 0) > 0" class="ml-1 bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="(candidate.notes?.length || 0) + (candidate.crm_notes?.length || 0)"></span>
                 </button>
                 <button
+                    @click="activeTab = 'emails'; if (!emailsLoaded) loadEmails();"
+                    :class="activeTab === 'emails' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 font-medium transition-colors"
+                >
+                    Emails
+                    <span x-show="emailsData.total_count > 0" class="ml-1 bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="emailsData.total_count"></span>
+                </button>
+                <button
                     @click="activeTab = 'documents'"
                     :class="activeTab === 'documents' ? 'border-b-2 border-alfa-blue text-alfa-blue' : 'text-gray-500 hover:text-gray-700'"
                     class="px-6 py-4 font-medium transition-colors"
@@ -601,6 +609,114 @@
                     </div>
                 </div>
 
+                <!-- Emails Tab -->
+                <div x-show="activeTab === 'emails'" x-cloak>
+                    <!-- Loading State -->
+                    <div x-show="emailsLoading" class="flex items-center justify-center py-12">
+                        <div class="spinner"></div>
+                        <span class="ml-3 text-gray-500">Loading emails...</span>
+                    </div>
+
+                    <!-- AI Insight Banner (if needs follow-up) -->
+                    <div x-show="!emailsLoading && emailThread.needs_followup" class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <div>
+                                <p class="text-sm font-medium text-amber-800">Follow-up needed</p>
+                                <p class="text-sm text-amber-700" x-text="'Candidate replied ' + emailThread.days_since_last_response + ' days ago with no response from team.'"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email List -->
+                    <div x-show="!emailsLoading && emailsData.emails?.length > 0">
+                        <div class="space-y-3">
+                            <template x-for="email in emailsData.emails" :key="email.id">
+                                <div
+                                    class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 cursor-pointer transition-colors"
+                                    :class="{'border-l-4 border-green-400': email.direction === 'inbound', 'border-l-4 border-blue-400': email.direction === 'outbound'}"
+                                    @click="selectedEmail = selectedEmail?.id === email.id ? null : email"
+                                >
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <!-- Direction badge -->
+                                                <span
+                                                    class="px-2 py-0.5 text-xs rounded-full"
+                                                    :class="email.direction === 'inbound' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'"
+                                                    x-text="email.direction === 'inbound' ? 'Received' : 'Sent'"
+                                                ></span>
+                                                <!-- Attachment indicator -->
+                                                <span x-show="email.has_attachment" class="text-gray-400" title="Has attachment">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                            <p class="font-medium text-gray-800 truncate" x-text="email.subject || '(No subject)'"></p>
+                                            <p class="text-sm text-gray-500 truncate">
+                                                <span x-text="email.direction === 'inbound' ? 'From: ' : 'To: '"></span>
+                                                <span x-text="email.direction === 'inbound' ? email.from_address : email.to_address"></span>
+                                            </p>
+                                            <p class="text-sm text-gray-600 mt-1 line-clamp-2" x-text="email.body_snippet"></p>
+                                        </div>
+                                        <div class="text-right ml-4 flex-shrink-0">
+                                            <p class="text-xs text-gray-500" x-text="formatEmailDate(email.sent_at)"></p>
+                                            <p class="text-xs text-gray-400" x-text="formatEmailTime(email.sent_at)"></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Expanded email body -->
+                                    <div x-show="selectedEmail?.id === email.id" x-collapse class="mt-4 pt-4 border-t border-gray-200">
+                                        <div class="text-sm text-gray-600 space-y-1 mb-3">
+                                            <p><span class="text-gray-500">From:</span> <span x-text="email.from_address"></span></p>
+                                            <p><span class="text-gray-500">To:</span> <span x-text="email.to_address"></span></p>
+                                            <p x-show="email.cc_address"><span class="text-gray-500">Cc:</span> <span x-text="email.cc_address"></span></p>
+                                            <p><span class="text-gray-500">Date:</span> <span x-text="formatDateTime(email.sent_at)"></span></p>
+                                        </div>
+                                        <div class="bg-white rounded p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto" x-text="email.body_full || email.body_snippet || 'No content'"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Load More Button -->
+                        <div x-show="emailsData.has_more" class="mt-4 text-center">
+                            <button
+                                @click="loadOlderEmails()"
+                                :disabled="loadingOlderEmails"
+                                class="px-4 py-2 text-sm text-alfa-blue border border-alfa-blue rounded-lg hover:bg-blue-50 disabled:opacity-50"
+                            >
+                                <span x-show="!loadingOlderEmails">Load older emails</span>
+                                <span x-show="loadingOlderEmails">Loading...</span>
+                            </button>
+                        </div>
+
+                        <!-- Cache Info -->
+                        <div class="mt-4 text-xs text-gray-400 text-center">
+                            <span x-text="'Showing ' + emailsData.emails.length + ' of ' + emailsData.total_count + ' emails'"></span>
+                            <span x-show="emailsData.oldest_cached_date" x-text="' • Cached from ' + formatDate(emailsData.oldest_cached_date)"></span>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div x-show="!emailsLoading && emailsData.emails?.length === 0" class="text-gray-500 text-center py-12">
+                        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="text-lg font-medium">No emails found</p>
+                        <p class="text-sm mt-1">Email history will appear here once synced</p>
+                        <button
+                            @click="loadEmails(true)"
+                            class="mt-4 px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 text-sm"
+                        >
+                            Fetch email history
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Documents Tab -->
                 <div x-show="activeTab === 'documents'" x-cloak>
                     <div class="text-gray-500 text-center py-12">
@@ -643,6 +759,13 @@ function candidateDetailApp() {
             content: '',
             type: 'general'
         },
+        // Email state
+        emailsLoaded: false,
+        emailsLoading: false,
+        loadingOlderEmails: false,
+        emailsData: { emails: [], total_count: 0, has_more: false },
+        emailThread: { needs_followup: false, days_since_last_response: null },
+        selectedEmail: null,
 
         async init() {
             // Get candidate ID from URL
@@ -819,6 +942,91 @@ function candidateDetailApp() {
                 hour: '2-digit',
                 minute: '2-digit'
             });
+        },
+
+        // Email methods
+        async loadEmails(includeHistory = false) {
+            if (this.emailsLoading) return;
+
+            this.emailsLoading = true;
+            this.selectedEmail = null;
+
+            try {
+                // Fetch emails from cache
+                const url = `/api/candidates/${this.candidate.id}/emails${includeHistory ? '?include_history=true' : ''}`;
+                const response = await fetch(url);
+
+                if (response.ok) {
+                    this.emailsData = await response.json();
+                    this.emailsLoaded = true;
+
+                    // Also fetch thread analysis for AI insights
+                    await this.loadEmailThread();
+                }
+            } catch (err) {
+                console.error('Failed to load emails:', err);
+            } finally {
+                this.emailsLoading = false;
+            }
+        },
+
+        async loadEmailThread() {
+            try {
+                const response = await fetch(`/api/candidates/${this.candidate.id}/email-thread`);
+                if (response.ok) {
+                    this.emailThread = await response.json();
+                }
+            } catch (err) {
+                console.error('Failed to load email thread:', err);
+            }
+        },
+
+        async loadOlderEmails() {
+            if (this.loadingOlderEmails) return;
+
+            this.loadingOlderEmails = true;
+
+            try {
+                const response = await fetch(`/api/candidates/${this.candidate.id}/emails?include_history=true`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Merge with existing emails, avoiding duplicates
+                    const existingIds = new Set(this.emailsData.emails.map(e => e.id));
+                    const newEmails = data.emails.filter(e => !existingIds.has(e.id));
+
+                    this.emailsData.emails = [...this.emailsData.emails, ...newEmails];
+                    this.emailsData.total_count = data.total_count;
+                    this.emailsData.has_more = data.has_more;
+                    this.emailsData.oldest_cached_date = data.oldest_cached_date;
+
+                    // Re-sort by date (newest first)
+                    this.emailsData.emails.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at));
+                }
+            } catch (err) {
+                console.error('Failed to load older emails:', err);
+            } finally {
+                this.loadingOlderEmails = false;
+            }
+        },
+
+        formatEmailDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'short' });
+
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        },
+
+        formatEmailTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
         }
     };
 }

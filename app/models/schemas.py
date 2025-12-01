@@ -315,6 +315,56 @@ class MarkNoShowRequest(BaseModel):
 
 
 # ============================================
+# Email Schemas
+# ============================================
+
+class CandidateEmailResponse(BaseModel):
+    """Email response for candidate emails list"""
+    id: int
+    zoho_email_id: str
+    zoho_candidate_id: str
+    direction: str  # inbound, outbound, system
+    from_address: str
+    to_address: str
+    cc_address: Optional[str] = None
+    subject: Optional[str] = None
+    body_snippet: Optional[str] = None
+    body_full: Optional[str] = None
+    sent_at: datetime
+    has_attachment: bool = False
+    message_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    source: str = "crm"
+    is_read: bool = True
+    needs_response: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class CandidateEmailsListResponse(BaseModel):
+    """Response for list of candidate emails with metadata"""
+    emails: List[CandidateEmailResponse] = []
+    total_count: int = 0
+    has_more: bool = False
+    oldest_cached_date: Optional[datetime] = None
+    newest_cached_date: Optional[datetime] = None
+    cache_status: str = "cached"  # cached, fetching, partial
+
+
+class EmailThreadResponse(BaseModel):
+    """Email thread for AI analysis - chronological order"""
+    candidate_id: str
+    candidate_name: Optional[str] = None
+    emails: List[CandidateEmailResponse] = []
+    total_count: int = 0
+    last_inbound_at: Optional[datetime] = None
+    last_outbound_at: Optional[datetime] = None
+    days_since_last_response: Optional[int] = None
+    needs_followup: bool = False
+
+
+# ============================================
 # Task Schemas
 # ============================================
 

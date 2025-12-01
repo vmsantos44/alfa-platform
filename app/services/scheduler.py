@@ -50,7 +50,7 @@ class SchedulerService:
             print(f"[Scheduler] Job {event.job_id} completed successfully")
 
     async def _sync_job(self):
-        """The actual sync job that runs on schedule - syncs candidates, interviews, tasks, and notes"""
+        """The actual sync job that runs on schedule - syncs candidates, interviews, tasks, notes, and emails"""
         if SchedulerService._sync_in_progress:
             print("[Scheduler] Sync already in progress, skipping...")
             return
@@ -77,29 +77,42 @@ class SchedulerService:
             print("[Scheduler] Syncing notes...")
             notes_result = await SyncService.sync_notes_from_zoho(full_sync=False)
 
+            # Sync emails (last 30 days for active candidates)
+            # This is more intensive, so we limit to recent emails only
+            print("[Scheduler] Syncing emails...")
+            try:
+                email_result = await SyncService.sync_emails_from_zoho(days_back=30)
+            except Exception as email_error:
+                print(f"[Scheduler] Email sync failed (non-critical): {email_error}")
+                email_result = {"emails_processed": 0, "emails_created": 0, "emails_updated": 0, "errors": 1}
+
             # Combine results
             result = {
                 "candidates": candidate_result,
                 "interviews": interview_result,
                 "tasks": task_result,
                 "notes": notes_result,
+                "emails": email_result,
                 "records_processed": (
                     candidate_result['records_processed'] +
                     interview_result['records_processed'] +
                     task_result['total_fetched'] +
-                    notes_result['records_processed']
+                    notes_result['records_processed'] +
+                    email_result.get('emails_processed', 0)
                 ),
                 "records_created": (
                     candidate_result['records_created'] +
                     interview_result['records_created'] +
                     task_result['created'] +
-                    notes_result['records_created']
+                    notes_result['records_created'] +
+                    email_result.get('emails_created', 0)
                 ),
                 "records_updated": (
                     candidate_result['records_updated'] +
                     interview_result['records_updated'] +
                     task_result['updated'] +
-                    notes_result['records_updated']
+                    notes_result['records_updated'] +
+                    email_result.get('emails_updated', 0)
                 ),
             }
 
@@ -110,7 +123,8 @@ class SchedulerService:
                   f"Candidates ({candidate_result['records_processed']}), "
                   f"Interviews ({interview_result['records_processed']}), "
                   f"Tasks ({task_result['total_fetched']}), "
-                  f"Notes ({notes_result['records_processed']})")
+                  f"Notes ({notes_result['records_processed']}), "
+                  f"Emails ({email_result.get('emails_processed', 0)})")
 
         except Exception as e:
             SchedulerService._last_sync_error = str(e)

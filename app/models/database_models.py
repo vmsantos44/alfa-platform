@@ -346,3 +346,60 @@ class CrmNote(Base):
 
     def __repr__(self):
         return f"<CrmNote {self.zoho_note_id} for {self.zoho_candidate_id}>"
+
+
+class EmailDirection(str, enum.Enum):
+    """Email direction types"""
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+    SYSTEM = "system"
+
+
+class CandidateEmail(Base):
+    """
+    Email cache for candidate communications.
+    Synced from Zoho CRM and used for:
+    - Fast display in Emails tab
+    - AI analysis for follow-up recommendations
+    """
+    __tablename__ = "candidate_emails"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Zoho identifiers
+    zoho_email_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    zoho_candidate_id: Mapped[str] = mapped_column(String(50), index=True)
+    parent_module: Mapped[str] = mapped_column(String(20), default="Leads")  # Leads or Contacts
+
+    # Email direction and addresses
+    direction: Mapped[str] = mapped_column(String(20), default="outbound")  # inbound, outbound, system
+    from_address: Mapped[str] = mapped_column(String(300))
+    to_address: Mapped[str] = mapped_column(String(500))  # May have multiple recipients
+    cc_address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # Email content
+    subject: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    body_snippet: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # First ~200 chars
+    body_full: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Full body (HTML stripped)
+
+    # Timestamps from Zoho
+    sent_at: Mapped[datetime] = mapped_column(DateTime, index=True)  # When email was sent/received
+
+    # Email metadata
+    has_attachment: Mapped[bool] = mapped_column(Boolean, default=False)
+    message_id: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # RFC message ID for threading
+    thread_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # For grouping threads
+
+    # Source tracking (for future: mailbox integration, etc.)
+    source: Mapped[str] = mapped_column(String(50), default="crm")  # crm, mailbox, etc.
+
+    # Status flags
+    is_read: Mapped[bool] = mapped_column(Boolean, default=True)
+    needs_response: Mapped[bool] = mapped_column(Boolean, default=False)  # AI can set this
+
+    # Local timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<CandidateEmail {self.direction} {self.subject[:30] if self.subject else 'No subject'}>"

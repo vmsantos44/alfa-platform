@@ -1449,3 +1449,482 @@ class SyncService:
             )
             sync_log = result.scalar_one_or_none()
             return sync_log.completed_at if sync_log else None
+
+    # ========================================================================
+    # EMAIL SYNC
+    # ========================================================================
+
+    @classmethod
+    async def sync_emails_from_zoho(cls, days_back: int = 30, limit_candidates: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Batch sync recent emails for all active candidates.
+        Called on a schedule (every 30 minutes) to keep email cache fresh.
+
+        Args:
+            days_back: How many days of email history to fetch (default 30)
+            limit_candidates: Optional limit on number of candidates to process (for testing)
+
+        Returns:
+            Dict with sync statistics
+        """
+        from app.models.database_models import CandidateEmail
+
+        print(f"📧 Starting email sync from Zoho CRM (last {days_back} days)...")
+
+        async with async_session() as db:
+            # Create sync log
+            sync_log = SyncLog(
+                sync_type="emails",
+                status="running",
+                started_at=datetime.utcnow()
+            )
+            db.add(sync_log)
+            await db.commit()
+
+            stats = {
+                "candidates_processed": 0,
+                "emails_processed": 0,
+                "emails_created": 0,
+                "emails_updated": 0,
+                "errors": 0,
+                "error_details": []
+            }
+
+            try:
+                crm = ZohoCRM()
+
+                # Get active candidates (those in active pipeline stages)
+                active_stages = [
+                    "New Candidate", "Screening", "Interview Scheduled",
+                    "Interview Completed", "Assessment", "Onboarding", "Active"
+                ]
+
+                query = select(CandidateCache).where(
+                    CandidateCache.stage.in_(active_stages)
+                ).order_by(CandidateCache.last_activity_date.desc())
+
+                if limit_candidates:
+                    query = query.limit(limit_candidates)
+
+                result = await db.execute(query)
+                candidates = result.scalars().all()
+
+                print(f"📧 Processing emails for {len(candidates)} active candidates...")
+
+                for candidate in candidates:
+                    try:
+                        candidate_stats = await cls._sync_emails_for_single_candidate(
+                            db, crm, candidate.zoho_id, candidate.zoho_module, days_back
+                        )
+                        stats["candidates_processed"] += 1
+                        stats["emails_processed"] += candidate_stats["processed"]
+                        stats["emails_created"] += candidate_stats["created"]
+                        stats["emails_updated"] += candidate_stats["updated"]
+
+                        # Commit every 10 candidates to avoid holding locks
+                        if stats["candidates_processed"] % 10 == 0:
+                            await db.commit()
+                            print(f"📧 Progress: {stats['candidates_processed']}/{len(candidates)} candidates")
+
+                    except Exception as e:
+                        print(f"⚠️ Error syncing emails for {candidate.zoho_id}: {e}")
+                        stats["errors"] += 1
+                        stats["error_details"].append(f"{candidate.zoho_id}: {str(e)[:100]}")
+
+                # Final commit
+                await db.commit()
+
+                # Update sync log
+                sync_log.status = "completed"
+                sync_log.completed_at = datetime.utcnow()
+                sync_log.records_processed = stats["emails_processed"]
+                sync_log.records_created = stats["emails_created"]
+                sync_log.records_updated = stats["emails_updated"]
+                sync_log.errors = stats["errors"]
+
+                await db.commit()
+
+                print(f"✅ Email sync complete: {stats['candidates_processed']} candidates, "
+                      f"{stats['emails_processed']} emails ({stats['emails_created']} new, "
+                      f"{stats['emails_updated']} updated)")
+
+            except Exception as e:
+                sync_log.status = "failed"
+                sync_log.error_message = str(e)[:500]
+                sync_log.completed_at = datetime.utcnow()
+                await db.commit()
+                raise
+
+            return stats
+
+    @classmethod
+    async def _sync_emails_for_single_candidate(
+        cls,
+        db: AsyncSession,
+        crm: ZohoCRM,
+        zoho_candidate_id: str,
+        module: str,
+        days_back: int = 30
+    ) -> Dict[str, int]:
+        """
+        Sync emails for a single candidate.
+
+        Args:
+            db: Database session
+            crm: Zoho CRM client
+            zoho_candidate_id: Candidate's Zoho ID
+            module: CRM module (Leads or Contacts)
+            days_back: How many days of history to fetch
+
+        Returns:
+            Dict with processed/created/updated counts
+        """
+        stats = {"processed": 0, "created": 0, "updated": 0}
+
+        page = 1
+        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+
+        while True:
+            try:
+                response = await crm.get_emails_for_record(
+                    module=module,
+                    record_id=zoho_candidate_id,
+                    page=page,
+                    per_page=100
+                )
+
+                emails = response.get("data", [])
+                if not emails:
+                    break
+
+                for email_data in emails:
+                    # Parse email date
+                    email_time = cls._parse_email_datetime(email_data.get("Date_Time") or email_data.get("Time"))
+
+                    # Skip emails older than cutoff (for batch sync)
+                    if email_time and email_time < cutoff_date:
+                        continue
+
+                    created = await cls._upsert_email_from_zoho(
+                        db, email_data, zoho_candidate_id, module
+                    )
+                    stats["processed"] += 1
+                    if created:
+                        stats["created"] += 1
+                    else:
+                        stats["updated"] += 1
+
+                # Check for more pages
+                info = response.get("info", {})
+                if not info.get("more_records", False):
+                    break
+
+                page += 1
+
+                # Safety limit
+                if page > 10:
+                    break
+
+            except Exception as e:
+                print(f"⚠️ Error fetching emails page {page} for {zoho_candidate_id}: {e}")
+                break
+
+        return stats
+
+    @classmethod
+    async def sync_emails_for_candidate(
+        cls,
+        zoho_candidate_id: str,
+        module: str = "Leads",
+        include_history: bool = False
+    ) -> Dict[str, Any]:
+        """
+        On-demand email sync for a specific candidate.
+        Called when user views the Emails tab.
+
+        Args:
+            zoho_candidate_id: Candidate's Zoho ID
+            module: CRM module (Leads or Contacts)
+            include_history: If True, fetch all history (not just recent)
+
+        Returns:
+            Dict with sync stats and emails
+        """
+        from app.models.database_models import CandidateEmail
+
+        print(f"📧 On-demand email sync for {zoho_candidate_id} (include_history={include_history})...")
+
+        async with async_session() as db:
+            crm = ZohoCRM()
+
+            # Determine how far back to fetch
+            if include_history:
+                # Fetch all available emails
+                days_back = 365 * 2  # 2 years
+            else:
+                # Just recent emails
+                days_back = 30
+
+            stats = await cls._sync_emails_for_single_candidate(
+                db, crm, zoho_candidate_id, module, days_back
+            )
+
+            await db.commit()
+
+            # Return the cached emails
+            result = await db.execute(
+                select(CandidateEmail)
+                .where(CandidateEmail.zoho_candidate_id == zoho_candidate_id)
+                .order_by(CandidateEmail.sent_at.desc())
+            )
+            emails = result.scalars().all()
+
+            return {
+                "stats": stats,
+                "emails": emails,
+                "total_count": len(emails)
+            }
+
+    @classmethod
+    async def _upsert_email_from_zoho(
+        cls,
+        db: AsyncSession,
+        data: Dict[str, Any],
+        zoho_candidate_id: str,
+        module: str
+    ) -> bool:
+        """
+        Insert or update an email record from Zoho CRM data.
+
+        Returns:
+            True if created, False if updated
+        """
+        from app.models.database_models import CandidateEmail
+
+        # Get unique email identifier
+        zoho_email_id = str(data.get("id", "") or data.get("Message_Id", ""))
+        if not zoho_email_id:
+            return False
+
+        # Check if exists
+        result = await db.execute(
+            select(CandidateEmail).where(CandidateEmail.zoho_email_id == zoho_email_id)
+        )
+        existing = result.scalar_one_or_none()
+
+        # Parse email data
+        from_data = data.get("From") or data.get("from") or {}
+        to_data = data.get("To") or data.get("to") or []
+
+        # Handle From field (can be string or dict)
+        if isinstance(from_data, dict):
+            from_address = from_data.get("email", "") or from_data.get("Email", "")
+        else:
+            from_address = str(from_data) if from_data else ""
+
+        # Handle To field (can be list of dicts or string)
+        if isinstance(to_data, list):
+            to_addresses = []
+            for t in to_data:
+                if isinstance(t, dict):
+                    to_addresses.append(t.get("email", "") or t.get("Email", ""))
+                else:
+                    to_addresses.append(str(t))
+            to_address = "; ".join(filter(None, to_addresses))
+        elif isinstance(to_data, dict):
+            to_address = to_data.get("email", "") or to_data.get("Email", "")
+        else:
+            to_address = str(to_data) if to_data else ""
+
+        # Handle CC field
+        cc_data = data.get("Cc") or data.get("cc") or []
+        if isinstance(cc_data, list):
+            cc_addresses = []
+            for c in cc_data:
+                if isinstance(c, dict):
+                    cc_addresses.append(c.get("email", "") or c.get("Email", ""))
+                else:
+                    cc_addresses.append(str(c))
+            cc_address = "; ".join(filter(None, cc_addresses)) or None
+        else:
+            cc_address = str(cc_data) if cc_data else None
+
+        # Subject
+        subject = data.get("Subject") or data.get("subject") or ""
+
+        # Body - strip HTML and create snippet
+        body_content = data.get("Content") or data.get("content") or data.get("Mail_Content") or ""
+        body_full = cls.strip_html(body_content) if body_content else ""
+        body_snippet = body_full[:200] if body_full else ""
+
+        # Parse sent date
+        sent_at = cls._parse_email_datetime(
+            data.get("Date_Time") or data.get("Time") or data.get("Sent_Time")
+        )
+        if not sent_at:
+            sent_at = datetime.utcnow()
+
+        # Determine direction based on activity type or from/to analysis
+        activity_type = data.get("Activity_Type") or data.get("type") or ""
+        if activity_type.lower() in ("sent", "outbound"):
+            direction = "outbound"
+        elif activity_type.lower() in ("received", "inbound"):
+            direction = "inbound"
+        else:
+            # Heuristic: if from contains our domain, it's outbound
+            direction = "outbound"  # Default assumption
+
+        # Check for attachments
+        has_attachment = bool(data.get("Has_Attachment") or data.get("Attachments"))
+
+        # Message ID for threading
+        message_id = data.get("Message_Id") or data.get("message_id")
+        thread_id = data.get("Thread_Id") or data.get("thread_id")
+
+        if existing:
+            # Update existing
+            existing.from_address = from_address
+            existing.to_address = to_address
+            existing.cc_address = cc_address
+            existing.subject = subject
+            existing.body_snippet = body_snippet
+            existing.body_full = body_full
+            existing.sent_at = sent_at
+            existing.direction = direction
+            existing.has_attachment = has_attachment
+            existing.message_id = message_id
+            existing.thread_id = thread_id
+            existing.updated_at = datetime.utcnow()
+            return False
+        else:
+            # Create new
+            new_email = CandidateEmail(
+                zoho_email_id=zoho_email_id,
+                zoho_candidate_id=zoho_candidate_id,
+                parent_module=module,
+                direction=direction,
+                from_address=from_address,
+                to_address=to_address,
+                cc_address=cc_address,
+                subject=subject,
+                body_snippet=body_snippet,
+                body_full=body_full,
+                sent_at=sent_at,
+                has_attachment=has_attachment,
+                message_id=message_id,
+                thread_id=thread_id,
+                source="crm"
+            )
+            db.add(new_email)
+            return True
+
+    @classmethod
+    def _parse_email_datetime(cls, value) -> Optional[datetime]:
+        """Parse email datetime from various Zoho formats"""
+        if not value:
+            return None
+        try:
+            if isinstance(value, datetime):
+                return value.replace(tzinfo=None) if value.tzinfo else value
+
+            # Try ISO format
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00").replace(" ", "T"))
+            return dt.replace(tzinfo=None) if dt.tzinfo else dt
+        except (ValueError, AttributeError, TypeError):
+            return None
+
+    @classmethod
+    async def get_email_thread_for_candidate(cls, zoho_candidate_id: str) -> Dict[str, Any]:
+        """
+        Get all emails for a candidate in chronological order.
+        Designed for AI analysis to detect missed replies, stalled conversations, etc.
+
+        Args:
+            zoho_candidate_id: Candidate's Zoho ID
+
+        Returns:
+            Dict with emails in chronological order and analysis metadata
+        """
+        from app.models.database_models import CandidateEmail
+
+        async with async_session() as db:
+            # Get all emails for this candidate, oldest first (chronological)
+            result = await db.execute(
+                select(CandidateEmail)
+                .where(CandidateEmail.zoho_candidate_id == zoho_candidate_id)
+                .order_by(CandidateEmail.sent_at.asc())
+            )
+            emails = result.scalars().all()
+
+            if not emails:
+                return {
+                    "candidate_id": zoho_candidate_id,
+                    "emails": [],
+                    "total_count": 0,
+                    "last_inbound_at": None,
+                    "last_outbound_at": None,
+                    "days_since_last_response": None,
+                    "needs_followup": False
+                }
+
+            # Find last inbound and outbound
+            last_inbound = None
+            last_outbound = None
+
+            for email in reversed(emails):  # Start from most recent
+                if email.direction == "inbound" and not last_inbound:
+                    last_inbound = email.sent_at
+                elif email.direction == "outbound" and not last_outbound:
+                    last_outbound = email.sent_at
+
+                if last_inbound and last_outbound:
+                    break
+
+            # Calculate days since last response
+            days_since_last_response = None
+            needs_followup = False
+
+            if last_inbound:
+                days_since = (datetime.utcnow() - last_inbound).days
+                days_since_last_response = days_since
+
+                # Check if we responded to their last email
+                if last_outbound:
+                    if last_inbound > last_outbound:
+                        # They replied after our last email - we should respond
+                        needs_followup = True if days_since >= 2 else False
+                else:
+                    # They emailed us but we never responded
+                    needs_followup = True
+
+            # Get candidate name
+            candidate_result = await db.execute(
+                select(CandidateCache)
+                .where(CandidateCache.zoho_id == zoho_candidate_id)
+            )
+            candidate = candidate_result.scalar_one_or_none()
+            candidate_name = candidate.full_name if candidate else None
+
+            return {
+                "candidate_id": zoho_candidate_id,
+                "candidate_name": candidate_name,
+                "emails": emails,
+                "total_count": len(emails),
+                "last_inbound_at": last_inbound,
+                "last_outbound_at": last_outbound,
+                "days_since_last_response": days_since_last_response,
+                "needs_followup": needs_followup
+            }
+
+    @classmethod
+    async def get_last_email_sync(cls) -> Optional[datetime]:
+        """Get the timestamp of the last successful email sync"""
+        async with async_session() as db:
+            result = await db.execute(
+                select(SyncLog)
+                .where(SyncLog.sync_type == "emails", SyncLog.status == "completed")
+                .order_by(SyncLog.completed_at.desc())
+                .limit(1)
+            )
+            sync_log = result.scalar_one_or_none()
+            return sync_log.completed_at if sync_log else None
