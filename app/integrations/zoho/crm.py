@@ -373,8 +373,8 @@ class ZohoAPI:
             response.raise_for_status()
             data = response.json()
 
-            # Zoho returns the email in 'Emails' array
-            emails = data.get("Emails", [])
+            # Zoho returns the email in 'email_related_list' array
+            emails = data.get("email_related_list", data.get("Emails", []))
             return emails[0] if emails else data
 
         except httpx.HTTPError as e:
