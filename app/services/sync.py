@@ -930,7 +930,7 @@ class SyncService:
 
         # Parse dates
         due_date = cls._parse_date(data.get("Due_Date"))
-        closed_time = parse_datetime(data.get("Closed_Time"))
+        closed_time = cls._parse_datetime(data.get("Closed_Time"))
 
         # Get owner info
         owner_data = data.get("Owner", {})
@@ -1029,6 +1029,20 @@ class SyncService:
         try:
             return datetime.strptime(date_str, "%Y-%m-%d")
         except (ValueError, TypeError):
+            return None
+
+    @classmethod
+    def _parse_datetime(cls, value) -> Optional[datetime]:
+        """Parse datetime value, handling various formats"""
+        if not value:
+            return None
+        try:
+            if isinstance(value, datetime):
+                return value.replace(tzinfo=None) if value.tzinfo else value
+            # Try ISO format
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00").replace(" ", "T"))
+            return dt.replace(tzinfo=None) if dt.tzinfo else dt
+        except (ValueError, AttributeError, TypeError):
             return None
 
     @classmethod
