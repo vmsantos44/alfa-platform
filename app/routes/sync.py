@@ -159,13 +159,38 @@ async def sync_notes(
         raise HTTPException(status_code=500, detail=f"Notes sync failed: {str(e)}")
 
 
+@router.post("/emails")
+async def sync_emails(
+    days_back: int = Query(30, ge=1, le=365, description="Days of email history to fetch"),
+    limit_candidates: int = Query(None, ge=1, le=1000, description="Limit number of candidates (for testing)")
+):
+    """
+    Sync emails from Zoho CRM for active candidates.
+    Fetches emails for each candidate and caches them locally.
+    This is a batch operation - use /api/candidates/{id}/emails for on-demand fetch.
+    """
+    try:
+        stats = await SyncService.sync_emails_from_zoho(
+            days_back=days_back,
+            limit_candidates=limit_candidates
+        )
+        return {
+            "success": True,
+            "message": "Email sync completed",
+            **stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
+
+
 @router.get("/status")
 async def get_sync_status():
-    """Get the status of the last sync for candidates, interviews, tasks, and notes"""
+    """Get the status of the last sync for candidates, interviews, tasks, notes, and emails"""
     last_candidate_sync = await SyncService.get_last_sync()
     last_interview_sync = await SyncService.get_last_interview_sync()
     last_task_sync = await SyncService.get_last_task_sync()
     last_notes_sync = await SyncService.get_last_notes_sync()
+    last_email_sync = await SyncService.get_last_email_sync()
     return {
         "candidates": {
             "last_sync": last_candidate_sync.isoformat() if last_candidate_sync else None,
@@ -182,6 +207,10 @@ async def get_sync_status():
         "notes": {
             "last_sync": last_notes_sync.isoformat() if last_notes_sync else None,
             "status": "ok" if last_notes_sync else "never_synced"
+        },
+        "emails": {
+            "last_sync": last_email_sync.isoformat() if last_email_sync else None,
+            "status": "ok" if last_email_sync else "never_synced"
         }
     }
 

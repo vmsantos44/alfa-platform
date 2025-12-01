@@ -295,6 +295,52 @@ class ZohoAPI:
             raise Exception(f"Failed to get activities: {str(e)}")
 
     @api_retry
+    async def get_emails_for_record(
+        self,
+        module: str,
+        record_id: str,
+        page: int = 1,
+        per_page: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Get emails for a specific record from Zoho CRM.
+
+        Args:
+            module: CRM module (Leads, Contacts, etc.)
+            record_id: The record ID
+            page: Page number (starts at 1)
+            per_page: Records per page (max 200)
+
+        Returns:
+            Dict with 'data' list of emails and 'info' pagination details
+        """
+        headers = await self._get_headers()
+
+        params = {
+            "page": page,
+            "per_page": min(per_page, 200)
+        }
+
+        try:
+            response = await self.client.get(
+                f"{self.settings.zoho_api_domain}/crm/v2/{module}/{record_id}/Emails",
+                headers=headers,
+                params=params,
+            )
+
+            # Handle 204 No Content (no emails)
+            if response.status_code == 204:
+                return {"data": [], "info": {"more_records": False}}
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            if hasattr(e, "response") and e.response:
+                if e.response.status_code in (204, 404):
+                    return {"data": [], "info": {"more_records": False}}
+            raise Exception(f"Failed to get emails for {module}/{record_id}: {str(e)}")
+
+    @api_retry
     async def get_attachments(self, module: str, record_id: str) -> Dict[str, Any]:
         """List all attachments for a record"""
         headers = await self._get_headers()

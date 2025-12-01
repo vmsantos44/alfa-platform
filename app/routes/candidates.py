@@ -9,7 +9,7 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.database_models import CandidateCache, ActionAlert, Interview, Task, CandidateNote, CrmNote
+from app.models.database_models import CandidateCache, ActionAlert, Interview, Task, CandidateNote, CrmNote, CandidateEmail
 from app.models.schemas import (
     CandidateResponse,
     CandidateSummary,
@@ -17,6 +17,9 @@ from app.models.schemas import (
     CandidateNoteCreate,
     CandidateNoteResponse,
     CrmNoteResponse,
+    CandidateEmailResponse,
+    CandidateEmailsListResponse,
+    EmailThreadResponse,
     PipelineStage,
     SuccessResponse,
     InterviewResponse,
@@ -904,3 +907,250 @@ async def get_candidate_crm_notes(
     notes = result.scalars().all()
 
     return [CrmNoteResponse.from_orm_with_phrases(n) for n in notes]
+
+
+# ============================================
+# Candidate Emails
+# ============================================
+
+@router.get("/{candidate_id}/emails", response_model=CandidateEmailsListResponse)
+async def get_candidate_emails(
+    candidate_id: int,
+    include_history: bool = Query(False, description="Fetch older emails from CRM if not cached"),
+    before_date: Optional[str] = Query(None, description="Fetch emails before this date (YYYY-MM-DD)"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum emails to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get emails for a candidate.
+
+    By default, returns cached recent emails (fast).
+    Use include_history=true to fetch older emails from CRM if not already cached.
+    """
+    # Get candidate to find zoho_id and module
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    zoho_id = candidate.zoho_id
+    module = candidate.zoho_module
+
+    # Check what we have cached
+    cached_result = await db.execute(
+        select(CandidateEmail)
+        .where(CandidateEmail.zoho_candidate_id == zoho_id)
+        .order_by(CandidateEmail.sent_at.desc())
+    )
+    cached_emails = cached_result.scalars().all()
+
+    # Determine cache status
+    oldest_cached = min((e.sent_at for e in cached_emails), default=None) if cached_emails else None
+    newest_cached = max((e.sent_at for e in cached_emails), default=None) if cached_emails else None
+
+    # If include_history=true and we have few/no emails, fetch from CRM
+    if include_history and len(cached_emails) < 5:
+        from app.services.sync import SyncService
+        try:
+            await SyncService.sync_emails_for_candidate(zoho_id, module, include_history=True)
+            # Re-fetch from cache
+            cached_result = await db.execute(
+                select(CandidateEmail)
+                .where(CandidateEmail.zoho_candidate_id == zoho_id)
+                .order_by(CandidateEmail.sent_at.desc())
+            )
+            cached_emails = cached_result.scalars().all()
+            oldest_cached = min((e.sent_at for e in cached_emails), default=None) if cached_emails else None
+            newest_cached = max((e.sent_at for e in cached_emails), default=None) if cached_emails else None
+        except Exception as e:
+            print(f"⚠️ Error fetching email history: {e}")
+
+    # Apply before_date filter if provided
+    if before_date:
+        try:
+            before_dt = datetime.strptime(before_date, "%Y-%m-%d")
+            cached_emails = [e for e in cached_emails if e.sent_at < before_dt]
+        except ValueError:
+            pass
+
+    # Apply limit
+    limited_emails = cached_emails[:limit]
+    has_more = len(cached_emails) > limit
+
+    # Convert to response schema
+    emails = [
+        CandidateEmailResponse(
+            id=e.id,
+            zoho_email_id=e.zoho_email_id,
+            zoho_candidate_id=e.zoho_candidate_id,
+            direction=e.direction,
+            from_address=e.from_address,
+            to_address=e.to_address,
+            cc_address=e.cc_address,
+            subject=e.subject,
+            body_snippet=e.body_snippet,
+            body_full=e.body_full,
+            sent_at=e.sent_at,
+            has_attachment=e.has_attachment,
+            message_id=e.message_id,
+            thread_id=e.thread_id,
+            source=e.source,
+            is_read=e.is_read,
+            needs_response=e.needs_response
+        )
+        for e in limited_emails
+    ]
+
+    return CandidateEmailsListResponse(
+        emails=emails,
+        total_count=len(cached_emails),
+        has_more=has_more,
+        oldest_cached_date=oldest_cached,
+        newest_cached_date=newest_cached,
+        cache_status="cached"
+    )
+
+
+@router.get("/{candidate_id}/emails/{email_id}", response_model=CandidateEmailResponse)
+async def get_candidate_email_detail(
+    candidate_id: int,
+    email_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get full details of a specific email"""
+    # Verify candidate exists
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Get the email
+    email_result = await db.execute(
+        select(CandidateEmail)
+        .where(
+            and_(
+                CandidateEmail.id == email_id,
+                CandidateEmail.zoho_candidate_id == candidate.zoho_id
+            )
+        )
+    )
+    email = email_result.scalar_one_or_none()
+
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    return CandidateEmailResponse(
+        id=email.id,
+        zoho_email_id=email.zoho_email_id,
+        zoho_candidate_id=email.zoho_candidate_id,
+        direction=email.direction,
+        from_address=email.from_address,
+        to_address=email.to_address,
+        cc_address=email.cc_address,
+        subject=email.subject,
+        body_snippet=email.body_snippet,
+        body_full=email.body_full,
+        sent_at=email.sent_at,
+        has_attachment=email.has_attachment,
+        message_id=email.message_id,
+        thread_id=email.thread_id,
+        source=email.source,
+        is_read=email.is_read,
+        needs_response=email.needs_response
+    )
+
+
+@router.get("/{candidate_id}/email-thread", response_model=EmailThreadResponse)
+async def get_candidate_email_thread(
+    candidate_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get email thread for a candidate (chronological order).
+    Designed for AI analysis - includes metadata about conversation state.
+    """
+    # Get candidate
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    from app.services.sync import SyncService
+    thread_data = await SyncService.get_email_thread_for_candidate(candidate.zoho_id)
+
+    # Convert emails to response schema
+    emails = [
+        CandidateEmailResponse(
+            id=e.id,
+            zoho_email_id=e.zoho_email_id,
+            zoho_candidate_id=e.zoho_candidate_id,
+            direction=e.direction,
+            from_address=e.from_address,
+            to_address=e.to_address,
+            cc_address=e.cc_address,
+            subject=e.subject,
+            body_snippet=e.body_snippet,
+            body_full=e.body_full,
+            sent_at=e.sent_at,
+            has_attachment=e.has_attachment,
+            message_id=e.message_id,
+            thread_id=e.thread_id,
+            source=e.source,
+            is_read=e.is_read,
+            needs_response=e.needs_response
+        )
+        for e in thread_data.get("emails", [])
+    ]
+
+    return EmailThreadResponse(
+        candidate_id=candidate.zoho_id,
+        candidate_name=candidate.full_name,
+        emails=emails,
+        total_count=thread_data.get("total_count", 0),
+        last_inbound_at=thread_data.get("last_inbound_at"),
+        last_outbound_at=thread_data.get("last_outbound_at"),
+        days_since_last_response=thread_data.get("days_since_last_response"),
+        needs_followup=thread_data.get("needs_followup", False)
+    )
+
+
+@router.post("/{candidate_id}/emails/sync", response_model=SuccessResponse)
+async def sync_candidate_emails(
+    candidate_id: int,
+    include_history: bool = Query(False, description="Sync full email history"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually trigger email sync for a candidate.
+    Useful for refreshing emails or fetching full history.
+    """
+    # Get candidate
+    candidate_result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    from app.services.sync import SyncService
+    try:
+        result = await SyncService.sync_emails_for_candidate(
+            candidate.zoho_id,
+            candidate.zoho_module,
+            include_history=include_history
+        )
+        return SuccessResponse(
+            message=f"Synced {result['stats']['processed']} emails ({result['stats']['created']} new)"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
