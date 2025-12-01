@@ -270,51 +270,8 @@
             </div>
         </div>
 
-        <!-- Charts Row - Funnel + Languages side by side -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            <div class="bg-white rounded-lg shadow-sm">
-                <div class="p-3 border-b flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-gray-800">PIPELINE</h2>
-                    <a href="/candidates" class="text-xs text-alfa-blue hover:underline">View All</a>
-                </div>
-                <div class="p-3">
-                    <canvas id="funnelChart" height="180"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-sm">
-                <div class="p-3 border-b">
-                    <h2 class="text-sm font-semibold text-gray-800">LANGUAGES</h2>
-                </div>
-                <div class="p-3">
-                    <canvas id="languageChart" height="180"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Three Column: Tier + Owner Chart + Recent Activity -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            <!-- By Tier -->
-            <div class="bg-white rounded-lg shadow-sm">
-                <div class="p-3 border-b">
-                    <h2 class="text-sm font-semibold text-gray-800">BY TIER</h2>
-                </div>
-                <div class="p-3">
-                    <canvas id="tierChart" height="150"></canvas>
-                </div>
-            </div>
-
-            <!-- By Owner -->
-            <div class="bg-white rounded-lg shadow-sm">
-                <div class="p-3 border-b">
-                    <h2 class="text-sm font-semibold text-gray-800">BY OWNER</h2>
-                </div>
-                <div class="p-3">
-                    <canvas id="ownerChart" height="150"></canvas>
-                </div>
-            </div>
-
-            <!-- Recent Activity -->
+        <!-- Recent Activity -->
+        <div class="grid grid-cols-1 gap-4 mb-4">
             <div class="bg-white rounded-lg shadow-sm">
                 <div class="p-3 border-b flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-gray-800">RECENT ACTIVITY</h2>
@@ -384,7 +341,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 function dashboardApp() {
     return {
@@ -399,7 +355,6 @@ function dashboardApp() {
 
         // Raw data (unfiltered) - stored for client-side filtering
         rawCandidates: [],
-        rawPipeline: [],
         rawRecentActivity: [],
         rawSystemAlerts: [],
         rawActionItems: [],
@@ -421,7 +376,6 @@ function dashboardApp() {
         systemAlertsLoading: false,
         actionItemsLoading: false,
         alertFilter: null,
-        charts: {},
 
         async init() {
             // Load saved filter from localStorage
@@ -441,9 +395,6 @@ function dashboardApp() {
 
             // Apply initial filter
             this.applyOwnerFilter();
-
-            // Render charts
-            await this.fetchChartData();
 
             this.lastRefresh = new Date().toISOString();
             this.loading = false;
@@ -571,9 +522,6 @@ function dashboardApp() {
 
             // Update action items summary
             this.updateFilteredActionSummary();
-
-            // Re-render charts with filtered data
-            this.updateCharts();
         },
 
         getFilteredAlertCount() {
@@ -705,129 +653,6 @@ function dashboardApp() {
             }
         },
 
-        async fetchChartData() {
-            try {
-                const [funnelRes, langRes, tierRes, ownerRes] = await Promise.all([
-                    fetch('/api/dashboard/analytics/pipeline-funnel'),
-                    fetch('/api/dashboard/analytics/by-language?limit=8'),
-                    fetch('/api/dashboard/analytics/by-tier'),
-                    fetch('/api/dashboard/analytics/by-owner?limit=8')
-                ]);
-
-                const funnelData = await funnelRes.json();
-                const langData = await langRes.json();
-                const tierData = await tierRes.json();
-                const ownerData = await ownerRes.json();
-
-                this.rawPipeline = funnelData.data;
-
-                this.renderFunnelChart(funnelData.data);
-                this.renderLanguageChart(langData.data);
-                this.renderTierChart(tierData.data);
-                this.renderOwnerChart(ownerData.data);
-
-            } catch (error) {
-                console.error('Failed to fetch chart data:', error);
-            }
-        },
-
-        updateCharts() {
-            // Re-render pipeline chart with filtered data if owner is selected
-            if (this.charts.funnel && this.filteredPipeline.length > 0) {
-                this.charts.funnel.data.labels = this.filteredPipeline.map(d => d.stage);
-                this.charts.funnel.data.datasets[0].data = this.filteredPipeline.map(d => d.count);
-                this.charts.funnel.update();
-            }
-        },
-
-        renderFunnelChart(data) {
-            const ctx = document.getElementById('funnelChart');
-            if (!ctx) return;
-            if (this.charts.funnel) this.charts.funnel.destroy();
-
-            const colors = [
-                'rgba(59, 130, 246, 0.8)', 'rgba(234, 179, 8, 0.8)', 'rgba(249, 115, 22, 0.8)',
-                'rgba(168, 85, 247, 0.8)', 'rgba(236, 72, 153, 0.8)', 'rgba(99, 102, 241, 0.8)', 'rgba(34, 197, 94, 0.8)'
-            ];
-
-            this.charts.funnel = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.stage),
-                    datasets: [{ label: 'Candidates', data: data.map(d => d.count), backgroundColor: colors, borderRadius: 4 }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { x: { grid: { display: false } }, y: { grid: { display: false } } }
-                }
-            });
-        },
-
-        renderLanguageChart(data) {
-            const ctx = document.getElementById('languageChart');
-            if (!ctx) return;
-            if (this.charts.language) this.charts.language.destroy();
-
-            const colors = [
-                'rgba(59, 130, 246, 0.8)', 'rgba(34, 197, 94, 0.8)', 'rgba(234, 179, 8, 0.8)',
-                'rgba(249, 115, 22, 0.8)', 'rgba(168, 85, 247, 0.8)', 'rgba(236, 72, 153, 0.8)',
-                'rgba(99, 102, 241, 0.8)', 'rgba(107, 114, 128, 0.8)'
-            ];
-
-            this.charts.language = new Chart(ctx, {
-                type: 'doughnut',
-                data: { labels: data.map(d => d.language), datasets: [{ data: data.map(d => d.count), backgroundColor: colors }] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } } }
-                }
-            });
-        },
-
-        renderTierChart(data) {
-            const ctx = document.getElementById('tierChart');
-            if (!ctx) return;
-            if (this.charts.tier) this.charts.tier.destroy();
-
-            const colors = { 'Tier 1': 'rgba(34, 197, 94, 0.8)', 'Tier 2': 'rgba(59, 130, 246, 0.8)', 'Tier 3': 'rgba(168, 85, 247, 0.8)' };
-
-            this.charts.tier = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: data.map(d => d.tier),
-                    datasets: [{ data: data.map(d => d.count), backgroundColor: data.map(d => colors[d.tier] || 'rgba(107, 114, 128, 0.8)') }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } } }
-                }
-            });
-        },
-
-        renderOwnerChart(data) {
-            const ctx = document.getElementById('ownerChart');
-            if (!ctx) return;
-            if (this.charts.owner) this.charts.owner.destroy();
-
-            this.charts.owner = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.owner.split(' ')[0]),
-                    datasets: [{ label: 'Candidates', data: data.map(d => d.count), backgroundColor: 'rgba(59, 130, 246, 0.8)', borderRadius: 4 }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { x: { grid: { display: false } }, y: { grid: { display: false }, beginAtZero: true } }
-                }
-            });
-        },
 
         formatTaskDate(dateStr) {
             if (!dateStr) return '';
