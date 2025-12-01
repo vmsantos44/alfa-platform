@@ -451,21 +451,23 @@ function dashboardApp() {
 
         async fetchCandidates() {
             try {
-                // Fetch candidates list to get owners and pipeline data
-                const response = await fetch('/api/candidates/?limit=5000');
-                const data = await response.json();
+                // Fetch candidates and filter options in parallel
+                const [candidatesRes, filterRes] = await Promise.all([
+                    fetch('/api/candidates/?limit=5000'),
+                    fetch('/api/candidates/filter-options')
+                ]);
+
+                const data = await candidatesRes.json();
                 this.rawCandidates = data.candidates || data || [];
 
-                // Extract unique recruitment owners
-                const ownerSet = new Set();
-                this.rawCandidates.forEach(c => {
-                    if (c.recruitment_owner) ownerSet.add(c.recruitment_owner);
-                });
-                this.owners = Array.from(ownerSet).sort();
+                // Get recruitment owners from filter-options (more reliable)
+                const filterData = await filterRes.json();
+                this.owners = filterData.recruitment_owners || [];
 
             } catch (error) {
                 console.error('Failed to fetch candidates:', error);
                 this.rawCandidates = [];
+                this.owners = [];
             }
         },
 

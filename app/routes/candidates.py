@@ -114,13 +114,21 @@ async def get_filter_options(db: AsyncSession = Depends(get_db)):
                 if lang:
                     all_languages.add(lang)
 
-    # Get unique owners
+    # Get unique candidate owners
     owner_result = await db.execute(
         select(CandidateCache.candidate_owner)
         .where(CandidateCache.candidate_owner.isnot(None))
         .distinct()
     )
     owners = [o for o in owner_result.scalars().all() if o]
+
+    # Get unique recruitment owners
+    recruitment_owner_result = await db.execute(
+        select(CandidateCache.recruitment_owner)
+        .where(CandidateCache.recruitment_owner.isnot(None))
+        .distinct()
+    )
+    recruitment_owners = [o for o in recruitment_owner_result.scalars().all() if o]
 
     # Get stage counts
     stage_counts = {}
@@ -151,6 +159,7 @@ async def get_filter_options(db: AsyncSession = Depends(get_db)):
     return {
         "languages": sorted(list(all_languages)),
         "owners": sorted(owners),
+        "recruitment_owners": sorted(recruitment_owners),
         "stages": stage_counts,
         "tiers": tiers,
         "states": states
