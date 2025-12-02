@@ -837,7 +837,7 @@
                                     <iframe
                                         x-show="selectedEmail?.html_body || selectedEmail?.html_content"
                                         :srcdoc="selectedEmail?.html_body || selectedEmail?.html_content || ''"
-                                        sandbox="allow-same-origin"
+                                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                                         class="w-full border-0"
                                         style="min-height: 300px; max-height: 400px;"
                                     ></iframe>
@@ -1096,8 +1096,10 @@ function candidateDetailApp() {
                 );
 
                 if (response.ok) {
-                    this.candidate?.stage = this.newStage;
-                    this.candidate.days_in_stage = 0;
+                    if (this.candidate) {
+                        this.candidate.stage = this.newStage;
+                        this.candidate.days_in_stage = 0;
+                    }
                     this.newStage = '';
                 }
             } catch (error) {
