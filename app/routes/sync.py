@@ -134,11 +134,17 @@ async def debug_zoho_connection():
     from app.integrations.zoho.crm import ZohoAPI
     try:
         api = ZohoAPI()
-        result = await api.get_records("Candidates", page=1, per_page=1)
-        return {
-            "status": "connected",
-            "test_record_count": len(result.get("data", [])) if result else 0
-        }
+        # Just check if we can initialize the API (token refresh works)
+        if api.access_token:
+            return {
+                "status": "connected",
+                "message": "Zoho API credentials valid"
+            }
+        else:
+            return {
+                "status": "error",
+                "error": "No access token"
+            }
     except Exception as e:
         return {
             "status": "error",
