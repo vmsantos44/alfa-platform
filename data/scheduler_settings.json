@@ -1,1 +1,7 @@
-{"sync_interval_minutes": 360}
+{
+  "candidates_interval_minutes": 30,
+  "interviews_interval_minutes": 15,
+  "tasks_interval_minutes": 5,
+  "notes_interval_minutes": 60,
+  "emails_interval_minutes": 120
+}

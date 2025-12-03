@@ -751,7 +751,7 @@ class SyncService:
                 if days_ago > 7:
                     status = "completed"  # Assume completed if more than a week old
                 else:
-                    status = "no_show"  # Recent past event with no check-in
+                    status = "completed"  # Past event with no check-in - assume completed
                 is_no_show = status == "no_show"
             else:
                 status = "scheduled"
