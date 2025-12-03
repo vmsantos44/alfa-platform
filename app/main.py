@@ -37,13 +37,13 @@ async def lifespan(app: FastAPI):
 
     # Start background scheduler for auto-sync (every 30 minutes)
     print("  Starting auto-sync scheduler...")
-    start_scheduler(interval_minutes=30, run_immediately=False)
+    await start_scheduler(run_immediately=False)
 
     print("=" * 50)
     yield
     # Shutdown
     print("Stopping scheduler...")
-    stop_scheduler()
+    await stop_scheduler()
     print("Alfa Operations Platform shutting down...")
 
 
