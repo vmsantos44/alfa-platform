@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models.database_models import Task
 from app.models.schemas import SuccessResponse
 
+from app.utils.helpers import clean_candidate_label
 router = APIRouter()
 
 
@@ -65,7 +66,7 @@ async def get_action_required(
 
         action_items.append({
             "id": task.id,
-            "title": task.title,
+            "title": clean_candidate_label(task.title) if task.title else "",
             "description": task.description,
             "task_type": task.task_type,
             "status": task.status,
@@ -176,7 +177,7 @@ async def list_tasks(
 
     return [{
         "id": task.id,
-        "title": task.title,
+        "title": clean_candidate_label(task.title) if task.title else "",
         "description": task.description,
         "task_type": task.task_type,
         "status": task.status,
@@ -203,7 +204,7 @@ async def get_task(task_id: int, db: AsyncSession = Depends(get_db)):
     return {
         "id": task.id,
         "zoho_task_id": task.zoho_task_id,
-        "title": task.title,
+        "title": clean_candidate_label(task.title) if task.title else "",
         "description": task.description,
         "task_type": task.task_type,
         "status": task.status,

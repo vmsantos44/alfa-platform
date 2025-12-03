@@ -199,7 +199,7 @@
                                                  'bg-amber-500': alert.priority === 'medium',
                                                  'bg-gray-400': alert.priority === 'low'
                                              }"></div>
-                                        <span class="truncate" x-text="alert.title"></span>
+                                        <a x-show="alert.action_url" :href="alert.action_url" class="truncate hover:text-blue-600 hover:underline" x-text="alert.title"></a><span x-show="!alert.action_url" class="truncate" x-text="alert.title"></span>
                                     </div>
                                     <a x-show="alert.action_url" :href="alert.action_url"
                                        class="text-xs text-alfa-blue hover:underline ml-2 flex-shrink-0">View</a>
@@ -251,7 +251,7 @@
                                               }"></span>
                                         <div class="flex-1 min-w-0">
                                             <p class="truncate font-medium" x-text="task.title"></p>
-                                            <p class="text-xs text-gray-500 truncate" x-show="task.candidate_name" x-text="task.candidate_name"></p>
+                                            <a x-show="task.zoho_candidate_id" :href="'/candidates/' + task.zoho_candidate_id" class="text-xs text-gray-500 truncate hover:text-blue-600 hover:underline" x-text="task.candidate_name"></a><p x-show="task.candidate_name && !task.zoho_candidate_id" class="text-xs text-gray-500 truncate" x-text="task.candidate_name"></p>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1 ml-2 flex-shrink-0">
