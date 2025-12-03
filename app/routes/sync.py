@@ -131,14 +131,13 @@ async def generate_sample_data():
 @router.get("/debug-zoho")
 async def debug_zoho_connection():
     """Test Zoho CRM API connection"""
-    from app.integrations.zoho.crm import get_crm_api
+    from app.integrations.zoho.crm import ZohoCRMAPI
     try:
-        api = get_crm_api()
-        # Try to fetch one candidate to test connection
-        result = api.get_all_records("Candidates", page=1, per_page=1)
+        api = ZohoCRMAPI()
+        result = await api.get_records("Candidates", page=1, per_page=1)
         return {
             "status": "connected",
-            "test_record_count": len(result) if result else 0
+            "test_record_count": len(result.get("data", [])) if result else 0
         }
     except Exception as e:
         return {
