@@ -1,308 +1,271 @@
 {% extends "base.html" %}
 
-{% block title %}Settings - Alfa Operations Platform{% endblock %}
-
+{% block title %}Settings{% endblock %}
 {% block nav_settings %}bg-gray-700{% endblock %}
-
 {% block page_title %}Settings{% endblock %}
 {% block page_subtitle %}Platform configuration{% endblock %}
 
 {% block content %}
-<div x-data="settingsApp()" x-init="init()">
-
-    <!-- Auto-Sync Section -->
-    <div class="bg-white rounded-xl shadow-sm mb-6">
-        <div class="p-4 border-b">
-            <h2 class="text-lg font-semibold text-gray-800">Auto-Sync from Zoho CRM</h2>
-            <p class="text-sm text-gray-500">Automatically sync candidate data at regular intervals</p>
-        </div>
-        <div class="p-6">
-            <!-- Scheduler Status -->
-            <div class="flex items-center justify-between mb-6 pb-6 border-b">
-                <div class="flex items-center gap-3">
-                    <div
-                        class="w-3 h-3 rounded-full"
-                        :class="scheduler.is_running ? 'bg-green-500 animate-pulse' : 'bg-gray-400'"
-                    ></div>
-                    <div>
-                        <p class="font-medium text-gray-800" x-text="scheduler.is_running ? 'Auto-Sync Active' : 'Auto-Sync Disabled'"></p>
-                        <p class="text-sm text-gray-500" x-show="scheduler.is_running">
-                            Syncing every <span x-text="scheduler.sync_interval_minutes"></span> minutes
-                        </p>
-                    </div>
+<div class="space-y-6" x-data="settingsPage()">
+    
+    <!-- Auto-Sync Header -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-800">Auto-Sync from Zoho CRM</h3>
+                <p class="text-sm text-gray-500">Configure sync intervals for each data category</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full" :class="scheduler.is_running ? 'bg-green-500' : 'bg-gray-300'"></div>
+                    <span class="text-sm" x-text="scheduler.is_running ? 'Scheduler Active' : 'Scheduler Stopped'"></span>
                 </div>
-                <button
-                    @click="toggleScheduler()"
-                    :disabled="schedulerLoading"
-                    class="px-4 py-2 rounded-lg font-medium transition-colors"
-                    :class="scheduler.is_running ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'"
-                >
-                    <span x-text="scheduler.is_running ? 'Stop Auto-Sync' : 'Start Auto-Sync'"></span>
+                <button @click="toggleScheduler()" class="px-4 py-2 text-sm rounded-lg"
+                        :class="scheduler.is_running ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'">
+                    <span x-text="scheduler.is_running ? 'Stop All' : 'Start All'"></span>
                 </button>
             </div>
+        </div>
+        
+        <!-- Sync All Button -->
+        <div class="flex items-center gap-4 pt-4 border-t">
+            <button @click="triggerSyncAll()" 
+                    :disabled="syncing"
+                    class="px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                <svg x-show="syncing" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-text="syncing ? 'Syncing...' : 'Sync All Now'"></span>
+            </button>
+            <span x-show="syncMessage" class="text-sm" :class="syncSuccess ? 'text-green-600' : 'text-red-600'" x-text="syncMessage"></span>
+        </div>
+    </div>
 
-            <!-- Sync Interval -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Sync Interval</label>
-                    <div class="flex gap-2">
-                        <select
-                            x-model="newInterval"
-                            class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alfa-blue"
-                        >
-                            <option value="5">Every 5 minutes</option>
-                            <option value="10">Every 10 minutes</option>
-                            <option value="15">Every 15 minutes</option>
-                            <option value="30">Every 30 minutes</option>
+    <!-- Per-Category Sync Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="(info, category) in scheduler.categories" :key="category">
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h4 class="font-semibold text-gray-800 capitalize" x-text="category"></h4>
+                        <p class="text-xs text-gray-500" x-text="info.description"></p>
+                    </div>
+                    <div class="w-2 h-2 rounded-full" :class="info.sync_in_progress ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'"></div>
+                </div>
+                
+                <!-- Interval Selector -->
+                <div class="mb-3">
+                    <label class="text-xs text-gray-500 block mb-1">Sync Interval</label>
+                    <div class="flex items-center gap-2">
+                        <select x-model="categoryIntervals[category]" 
+                                @change="updateCategoryInterval(category)"
+                                class="flex-1 text-sm border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-alfa-blue focus:border-transparent">
+                            <option value="5">Every 5 min</option>
+                            <option value="10">Every 10 min</option>
+                            <option value="15">Every 15 min</option>
+                            <option value="30">Every 30 min</option>
                             <option value="60">Every 1 hour</option>
                             <option value="120">Every 2 hours</option>
                             <option value="360">Every 6 hours</option>
                             <option value="720">Every 12 hours</option>
                             <option value="1440">Every 24 hours</option>
                         </select>
-                        <button
-                            @click="updateInterval()"
-                            :disabled="newInterval == scheduler.sync_interval_minutes"
-                            class="px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            Update
-                        </button>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Next Scheduled Sync</label>
-                    <p class="px-3 py-2 bg-gray-50 rounded-lg text-gray-700" x-text="formatNextSync(scheduler.next_sync_time)"></p>
+                
+                <!-- Last Sync Info -->
+                <div class="text-xs text-gray-500 mb-3 space-y-1">
+                    <div class="flex justify-between">
+                        <span>Last sync:</span>
+                        <span x-text="info.last_sync_time ? formatTime(info.last_sync_time) : 'Never'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Next sync:</span>
+                        <span x-text="info.next_sync_time ? formatNextSync(info.next_sync_time) : '-'"></span>
+                    </div>
+                    <div x-show="info.last_sync_result" class="flex justify-between">
+                        <span>Last result:</span>
+                        <span class="text-green-600" x-text="(info.last_sync_result?.records_processed || 0) + ' processed'"></span>
+                    </div>
+                    <div x-show="info.last_sync_error" class="text-red-500" x-text="info.last_sync_error"></div>
                 </div>
-            </div>
-
-            <!-- Last Sync Info -->
-            <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                <h3 class="font-medium text-gray-800 mb-3">Last Sync Result</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div>
-                        <p class="text-2xl font-bold text-gray-800" x-text="scheduler.last_sync_result?.total_processed || 0"></p>
-                        <p class="text-xs text-gray-500">Processed</p>
-                    </div>
-                    <div>
-                        <p class="text-2xl font-bold text-green-600" x-text="scheduler.last_sync_result?.total_created || 0"></p>
-                        <p class="text-xs text-gray-500">Created</p>
-                    </div>
-                    <div>
-                        <p class="text-2xl font-bold text-blue-600" x-text="scheduler.last_sync_result?.total_updated || 0"></p>
-                        <p class="text-xs text-gray-500">Updated</p>
-                    </div>
-                    <div>
-                        <p class="text-2xl font-bold" :class="(scheduler.last_sync_result?.total_errors || 0) > 0 ? 'text-red-600' : 'text-gray-400'" x-text="scheduler.last_sync_result?.total_errors || 0"></p>
-                        <p class="text-xs text-gray-500">Errors</p>
-                    </div>
-                </div>
-                <p class="text-sm text-gray-500 mt-3 text-center" x-show="scheduler.last_sync_time">
-                    Last synced: <span x-text="formatDateTime(scheduler.last_sync_time)"></span>
-                </p>
-                <p class="text-sm text-gray-400 mt-3 text-center" x-show="!scheduler.last_sync_time">
-                    No sync performed yet
-                </p>
-                <p class="text-sm text-red-600 mt-2 text-center" x-show="scheduler.last_sync_error" x-text="scheduler.last_sync_error"></p>
-            </div>
-
-            <!-- Manual Sync -->
-            <div class="flex items-center justify-between pt-4 border-t">
-                <div>
-                    <p class="font-medium text-gray-800">Manual Sync</p>
-                    <p class="text-sm text-gray-500">Trigger a sync immediately</p>
-                </div>
-                <button
-                    @click="triggerSync()"
-                    :disabled="syncing || scheduler.sync_in_progress"
-                    class="px-4 py-2 bg-alfa-blue text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                    <svg x-show="syncing || scheduler.sync_in_progress" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                
+                <!-- Sync Now Button -->
+                <button @click="triggerCategorySync(category)" 
+                        :disabled="info.sync_in_progress || categorySyncing[category]"
+                        class="w-full px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 flex items-center justify-center gap-1">
+                    <svg x-show="info.sync_in_progress || categorySyncing[category]" class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
-                    <span x-text="syncing || scheduler.sync_in_progress ? 'Syncing...' : 'Sync Now'"></span>
+                    <span x-text="info.sync_in_progress || categorySyncing[category] ? 'Syncing...' : 'Sync Now'"></span>
                 </button>
             </div>
-
-            <div x-show="syncMessage" x-cloak class="mt-4 p-3 rounded-lg" :class="syncSuccess ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
-                <p x-text="syncMessage"></p>
-            </div>
-        </div>
+        </template>
     </div>
 
     <!-- API Status -->
-    <div class="bg-white rounded-xl shadow-sm mb-6">
-        <div class="p-4 border-b">
-            <h2 class="text-lg font-semibold text-gray-800">API Status</h2>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="text-center p-4 bg-gray-50 rounded-lg">
-                    <div class="w-3 h-3 rounded-full mx-auto mb-2" :class="apiStatus.platform ? 'bg-green-500' : 'bg-red-500'"></div>
-                    <p class="text-sm font-medium">Platform API</p>
-                </div>
-                <div class="text-center p-4 bg-gray-50 rounded-lg">
-                    <div class="w-3 h-3 rounded-full mx-auto mb-2" :class="apiStatus.zoho ? 'bg-green-500' : 'bg-yellow-500'"></div>
-                    <p class="text-sm font-medium">Zoho CRM</p>
-                </div>
-                <div class="text-center p-4 bg-gray-50 rounded-lg">
-                    <div class="w-3 h-3 rounded-full mx-auto mb-2 bg-gray-300"></div>
-                    <p class="text-sm font-medium">Zoho Books</p>
-                </div>
-                <div class="text-center p-4 bg-gray-50 rounded-lg">
-                    <div class="w-3 h-3 rounded-full mx-auto mb-2 bg-gray-300"></div>
-                    <p class="text-sm font-medium">MS Teams</p>
-                </div>
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">API Status</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full" :class="apiStatus.platform ? 'bg-green-500' : 'bg-red-500'"></div>
+                <span class="text-sm text-gray-600">Platform API</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full" :class="apiStatus.zoho ? 'bg-green-500' : 'bg-red-500'"></div>
+                <span class="text-sm text-gray-600">Zoho CRM</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-gray-300"></div>
+                <span class="text-sm text-gray-600">Zoho Books</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-gray-300"></div>
+                <span class="text-sm text-gray-600">MS Teams</span>
             </div>
         </div>
     </div>
 
     <!-- About -->
-    <div class="bg-white rounded-xl shadow-sm">
-        <div class="p-4 border-b">
-            <h2 class="text-lg font-semibold text-gray-800">About</h2>
-        </div>
-        <div class="p-6">
-            <div class="space-y-2 text-sm text-gray-600">
-                <p><span class="font-medium">Version:</span> 2.0.0</p>
-                <p><span class="font-medium">Platform:</span> Alfa Operations Platform</p>
-                <p><span class="font-medium">Organization:</span> Alfa Systems</p>
-            </div>
-        </div>
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-2">About</h3>
+        <p class="text-sm text-gray-600">Version: 2.1.0</p>
     </div>
-
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
 <script>
-function settingsApp() {
+function settingsPage() {
     return {
-        syncing: false,
-        syncMessage: '',
-        syncSuccess: false,
-        schedulerLoading: false,
-        newInterval: '30',
         scheduler: {
             is_running: false,
-            sync_interval_minutes: 30,
-            sync_in_progress: false,
-            last_sync_time: null,
-            last_sync_result: null,
-            last_sync_error: null,
-            next_sync_time: null
+            categories: {}
         },
+        categoryIntervals: {},
+        categorySyncing: {},
         apiStatus: {
-            platform: true,
+            platform: false,
             zoho: false
         },
+        syncing: false,
+        syncMessage: "",
+        syncSuccess: true,
 
         async init() {
-            await this.fetchSchedulerStatus();
+            await this.fetchStatus();
             await this.checkApiStatus();
             // Refresh status every 30 seconds
-            setInterval(() => this.fetchSchedulerStatus(), 30000);
+            setInterval(() => this.fetchStatus(), 30000);
         },
 
-        async fetchSchedulerStatus() {
+        async fetchStatus() {
             try {
-                const response = await fetch('/api/sync/scheduler/status');
-                if (response.ok) {
-                    this.scheduler = await response.json();
-                    this.newInterval = String(this.scheduler.sync_interval_minutes);
-                }
-            } catch (error) {
-                console.error('Failed to fetch scheduler status:', error);
-            }
-        },
-
-        async toggleScheduler() {
-            this.schedulerLoading = true;
-            try {
-                const endpoint = this.scheduler.is_running ? '/api/sync/scheduler/stop' : '/api/sync/scheduler/start';
-                const response = await fetch(endpoint, { method: 'POST' });
-                if (response.ok) {
-                    await this.fetchSchedulerStatus();
-                }
-            } catch (error) {
-                console.error('Failed to toggle scheduler:', error);
-            }
-            this.schedulerLoading = false;
-        },
-
-        async updateInterval() {
-            try {
-                const response = await fetch(`/api/sync/scheduler/interval?interval_minutes=${this.newInterval}`, {
-                    method: 'PUT'
-                });
-                if (response.ok) {
-                    await this.fetchSchedulerStatus();
-                }
-            } catch (error) {
-                console.error('Failed to update interval:', error);
-            }
-        },
-
-        async triggerSync() {
-            this.syncing = true;
-            this.syncMessage = '';
-
-            try {
-                const response = await fetch('/api/sync/scheduler/trigger', { method: 'POST' });
+                const response = await fetch("/api/sync/scheduler/status");
                 const data = await response.json();
-
-                if (data.error) {
-                    this.syncSuccess = false;
-                    this.syncMessage = data.error;
-                } else {
-                    this.syncSuccess = true;
-                    this.syncMessage = `Sync complete! ${data.records_processed || 0} records processed.`;
-                    await this.fetchSchedulerStatus();
+                this.scheduler = data;
+                // Initialize category intervals from status
+                for (const [category, info] of Object.entries(data.categories || {})) {
+                    if (!this.categoryIntervals[category]) {
+                        this.categoryIntervals[category] = info.interval_minutes;
+                    }
+                    if (this.categorySyncing[category] === undefined) {
+                        this.categorySyncing[category] = false;
+                    }
                 }
             } catch (error) {
-                this.syncSuccess = false;
-                this.syncMessage = 'Failed to connect to server';
+                console.error("Failed to fetch scheduler status:", error);
             }
-
-            this.syncing = false;
         },
 
         async checkApiStatus() {
             try {
-                const response = await fetch('/health');
+                const response = await fetch("/api/dashboard/stats");
                 this.apiStatus.platform = response.ok;
             } catch {
                 this.apiStatus.platform = false;
             }
+            try {
+                const response = await fetch("/api/sync/debug-zoho");
+                const data = await response.json();
+                this.apiStatus.zoho = data.status === "connected";
+            } catch {
+                this.apiStatus.zoho = false;
+            }
         },
 
-        formatDateTime(dateStr) {
-            if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            return date.toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+        async toggleScheduler() {
+            try {
+                const endpoint = this.scheduler.is_running ? "/api/sync/scheduler/stop" : "/api/sync/scheduler/start";
+                await fetch(endpoint, { method: "POST" });
+                await this.fetchStatus();
+            } catch (error) {
+                console.error("Failed to toggle scheduler:", error);
+            }
         },
 
-        formatNextSync(dateStr) {
-            if (!dateStr) return 'Not scheduled';
-            const date = new Date(dateStr);
+        async updateCategoryInterval(category) {
+            const interval = parseInt(this.categoryIntervals[category]);
+            try {
+                const response = await fetch(`/api/sync/scheduler/interval/${category}?interval_minutes=${interval}`, {
+                    method: "PUT"
+                });
+                if (response.ok) {
+                    await this.fetchStatus();
+                }
+            } catch (error) {
+                console.error(`Failed to update ${category} interval:`, error);
+            }
+        },
+
+        async triggerCategorySync(category) {
+            this.categorySyncing[category] = true;
+            try {
+                const response = await fetch(`/api/sync/scheduler/trigger?category=${category}`, {
+                    method: "POST"
+                });
+                await this.fetchStatus();
+            } catch (error) {
+                console.error(`Failed to sync ${category}:`, error);
+            } finally {
+                this.categorySyncing[category] = false;
+            }
+        },
+
+        async triggerSyncAll() {
+            this.syncing = true;
+            this.syncMessage = "";
+            try {
+                const response = await fetch("/api/sync/scheduler/trigger", { method: "POST" });
+                const data = await response.json();
+                this.syncSuccess = true;
+                this.syncMessage = "All categories synced successfully";
+                await this.fetchStatus();
+            } catch (error) {
+                this.syncSuccess = false;
+                this.syncMessage = "Sync failed: " + error.message;
+            } finally {
+                this.syncing = false;
+                setTimeout(() => this.syncMessage = "", 5000);
+            }
+        },
+
+        formatTime(isoString) {
+            if (!isoString) return "Never";
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        },
+
+        formatNextSync(isoString) {
+            if (!isoString) return "-";
+            const next = new Date(isoString);
             const now = new Date();
-            const diffMs = date - now;
+            const diffMs = next - now;
+            if (diffMs < 0) return "Now";
             const diffMins = Math.round(diffMs / 60000);
-
-            if (diffMins <= 0) return 'Any moment now...';
-            if (diffMins === 1) return 'In 1 minute';
-            if (diffMins < 60) return `In ${diffMins} minutes`;
-
-            const diffHours = Math.floor(diffMins / 60);
-            const remainingMins = diffMins % 60;
-            if (diffHours === 1) return `In 1 hour ${remainingMins > 0 ? remainingMins + ' min' : ''}`;
-            return `In ${diffHours} hours ${remainingMins > 0 ? remainingMins + ' min' : ''}`;
+            if (diffMins < 60) return `In ${diffMins} min`;
+            const diffHours = Math.round(diffMins / 60);
+            return `In ${diffHours} hour${diffHours > 1 ? "s" : ""}`;
         }
     };
 }
