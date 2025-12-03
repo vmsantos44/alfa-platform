@@ -572,7 +572,8 @@ function dashboardApp() {
 
         get filteredAlerts() {
             const alerts = Array.isArray(this.rawSystemAlerts) ? this.rawSystemAlerts : [];
-            let filtered = this.selectedOwner
+            // Show all tasks regardless of owner filter (tasks are system-assigned)
+            let filtered = false && this.selectedOwner
                 ? alerts.filter(a => !a.recruitment_owner || a.recruitment_owner === this.selectedOwner)
                 : alerts;
 
@@ -588,7 +589,8 @@ function dashboardApp() {
 
         get filteredActionItems() {
             const items = Array.isArray(this.rawActionItems) ? this.rawActionItems : [];
-            let filtered = this.selectedOwner
+            // Show all tasks regardless of owner filter (tasks are system-assigned)
+            let filtered = false && this.selectedOwner
                 ? items.filter(t => !t.assigned_to || t.assigned_to.includes(this.selectedOwner.split(' ')[0]))
                 : items;
 
