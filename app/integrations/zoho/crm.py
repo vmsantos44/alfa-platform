@@ -323,7 +323,7 @@ class ZohoAPI:
 
         try:
             response = await self.client.get(
-                f"{self.settings.zoho_api_domain}/crm/v2/{module}/{record_id}/Emails",
+                f"{self.settings.zoho_api_domain}/crm/v8/{module}/{record_id}/Emails",
                 headers=headers,
                 params=params,
             )
@@ -362,7 +362,7 @@ class ZohoAPI:
 
         try:
             response = await self.client.get(
-                f"{self.settings.zoho_api_domain}/crm/v2/{module}/{record_id}/Emails/{message_id}",
+                f"{self.settings.zoho_api_domain}/crm/v8/{module}/{record_id}/Emails/{message_id}",
                 headers=headers,
             )
 

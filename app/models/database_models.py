@@ -121,6 +121,7 @@ class CandidateCache(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_synced: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_email_sync: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Track per-candidate email sync
     zoho_modified_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     zoho_created_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # When lead was created in Zoho
 

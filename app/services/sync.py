@@ -162,7 +162,7 @@ class SyncService:
                             per_page=per_page,
                             fields=[
                                 "id", "First_Name", "Last_Name", "Email", "Phone", "Mobile",
-                                "Lead_Status", "Stage", "Tier_Level", "Language", "Other_spoken_language_s",
+                                "Lead_Status", "Stage", "Candidate_Stage", "Tier_Level", "Language", "Other_spoken_language_s",
                                 "City", "State", "Country", "Service_Location",
                                 "Owner", "Candidate_Recruitment_Owner", "Client", "Agreed_Rate",
                                 "Language_Assesment", "Language_Assessment_Graded_By",
@@ -287,9 +287,11 @@ class SyncService:
         last_name = to_string(data.get("Last_Name")) or ""
         full_name = f"{first_name} {last_name}".strip() or "Unknown"
 
-        # Get lead status and map to stage
+        # Get lead status and Candidate_Stage
         lead_status = to_string(data.get("Lead_Status")) or ""
-        stage = cls.map_status_to_stage(lead_status)
+        zoho_stage = to_string(data.get("Stage")) or ""
+        # Use Stage field from Zoho if available, otherwise fall back to mapping
+        stage = zoho_stage if zoho_stage else cls.map_status_to_stage(lead_status)
 
         # Build languages string
         primary_lang = to_string(data.get("Language")) or ""
@@ -584,7 +586,7 @@ class SyncService:
                             fields=[
                                 "id", "Event_Title", "Subject", "Start_DateTime", "End_DateTime",
                                 "What_Id", "$se_module", "Owner", "Participants",
-                                "Check_In_Status", "Description", "Created_Time", "Modified_Time"
+                                "Check_In_Status", "Appointment_Status", "Description", "Created_Time", "Modified_Time"
                             ]
                         )
 
@@ -677,12 +679,18 @@ class SyncService:
                 return None
             try:
                 if isinstance(value, datetime):
-                    # Strip timezone if present
-                    return value.replace(tzinfo=None) if value.tzinfo else value
+                    # Convert to UTC if timezone-aware, then strip timezone
+                    if value.tzinfo:
+                        from datetime import timezone
+                        return value.astimezone(timezone.utc).replace(tzinfo=None)
+                    return value
                 # Try ISO format
                 dt = datetime.fromisoformat(value.replace("Z", "+00:00").replace(" ", "T"))
-                # Strip timezone to make naive (consistent with rest of codebase)
-                return dt.replace(tzinfo=None) if dt.tzinfo else dt
+                # Convert to UTC if timezone-aware, then strip timezone for naive datetime
+                if dt.tzinfo:
+                    from datetime import timezone
+                    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+                return dt
             except (ValueError, AttributeError):
                 return None
 
@@ -720,11 +728,37 @@ class SyncService:
         owner_data = data.get("Owner", {})
         interviewer = owner_data.get("name") if isinstance(owner_data, dict) else str(owner_data) if owner_data else None
 
-        # Determine interview status from Check_In_Status and date
+        # Determine interview status - prioritize Appointment_Status field from Zoho
+        appointment_status = data.get("Appointment_Status", "")
         check_in_status = data.get("Check_In_Status", "")
         now = datetime.utcnow()
-
-        if check_in_status:
+        
+        # Default values
+        status = "scheduled"
+        is_no_show = False
+        
+        # First check Appointment_Status (primary source from Zoho)
+        if appointment_status:
+            appt_lower = str(appointment_status).lower()
+            if "completed" in appt_lower or "attended" in appt_lower or "showed" in appt_lower:
+                status = "completed"
+                is_no_show = False
+            elif "no show" in appt_lower or "no-show" in appt_lower or "noshow" in appt_lower or "absent" in appt_lower:
+                status = "no_show"
+                is_no_show = True
+            elif "cancelled" in appt_lower or "canceled" in appt_lower:
+                status = "cancelled"
+                is_no_show = False
+            elif "rescheduled" in appt_lower:
+                status = "rescheduled"
+                is_no_show = False
+            elif "scheduled" in appt_lower or "confirmed" in appt_lower or "pending" in appt_lower:
+                status = "scheduled"
+                is_no_show = False
+            # If Appointment_Status is set but does not match known values, keep as scheduled
+        
+        # If no Appointment_Status, fall back to Check_In_Status
+        elif check_in_status:
             check_in_lower = str(check_in_status).lower()
             if "checked in" in check_in_lower or "completed" in check_in_lower:
                 status = "completed"
@@ -735,8 +769,10 @@ class SyncService:
             elif "cancelled" in check_in_lower:
                 status = "cancelled"
                 is_no_show = False
+            elif "planned" in check_in_lower:
+                status = "scheduled"
+                is_no_show = False
             else:
-                # Event is past but no check-in - likely no show
                 if start_dt < now:
                     status = "no_show"
                     is_no_show = True
@@ -744,18 +780,18 @@ class SyncService:
                     status = "scheduled"
                     is_no_show = False
         else:
-            # No check-in status - determine by date
+            # No status fields - determine by date
             if start_dt < now:
-                # Past event with no status - assume completed unless very old
                 days_ago = (now - start_dt).days
                 if days_ago > 7:
-                    status = "completed"  # Assume completed if more than a week old
+                    status = "completed"
                 else:
-                    status = "no_show"  # Recent past event with no check-in
+                    status = "no_show"
                 is_no_show = status == "no_show"
             else:
                 status = "scheduled"
                 is_no_show = False
+
 
         # Determine interview type from title
         title_lower = title.lower()
@@ -1331,7 +1367,7 @@ class SyncService:
                         page += 1
 
                         # Safety limit
-                        if page > 100:
+                        if page > 500:
                             print("⚠️ Reached page limit (100)")
                             break
 
@@ -1464,21 +1500,35 @@ class SyncService:
     # ========================================================================
 
     @classmethod
-    async def sync_emails_from_zoho(cls, days_back: int = 30, limit_candidates: Optional[int] = None) -> Dict[str, Any]:
+    async def sync_emails_from_zoho(
+        cls,
+        days_back: int = 7,
+        limit_candidates: Optional[int] = None,
+        min_hours_since_last_sync: int = 6,
+        skip_recent_activity_filter: bool = False
+    ) -> Dict[str, Any]:
         """
-        Batch sync recent emails for all active candidates.
+        Batch sync recent emails for active candidates with smart filtering.
         Called on a schedule (every 30 minutes) to keep email cache fresh.
 
+        OPTIMIZED: Now skips candidates who:
+        - Have no activity in the last `days_back` days
+        - Were already synced within `min_hours_since_last_sync` hours
+
         Args:
-            days_back: How many days of email history to fetch (default 30)
+            days_back: How many days of email history to fetch (default 7, reduced from 30)
             limit_candidates: Optional limit on number of candidates to process (for testing)
+            min_hours_since_last_sync: Skip candidates synced within this many hours (default 6)
+            skip_recent_activity_filter: If True, ignore activity date filter (for full sync)
 
         Returns:
             Dict with sync statistics
         """
         from app.models.database_models import CandidateEmail
+        from sqlalchemy import or_
 
-        print(f"📧 Starting email sync from Zoho CRM (last {days_back} days)...")
+        print(f"📧 Starting OPTIMIZED email sync from Zoho CRM (last {days_back} days)...")
+        print(f"📧 Filters: min_hours_since_last_sync={min_hours_since_last_sync}, skip_recent_activity_filter={skip_recent_activity_filter}")
 
         async with async_session() as db:
             # Create sync log
@@ -1492,6 +1542,7 @@ class SyncService:
 
             stats = {
                 "candidates_processed": 0,
+                "candidates_skipped": 0,
                 "emails_processed": 0,
                 "emails_created": 0,
                 "emails_updated": 0,
@@ -1508,9 +1559,35 @@ class SyncService:
                     "Interview Completed", "Assessment", "Onboarding", "Active"
                 ]
 
+                # Calculate cutoff dates for smart filtering
+                activity_cutoff = datetime.utcnow() - timedelta(days=days_back)
+                email_sync_cutoff = datetime.utcnow() - timedelta(hours=min_hours_since_last_sync)
+
+                # Build query with smart filtering
                 query = select(CandidateCache).where(
                     CandidateCache.stage.in_(active_stages)
-                ).order_by(CandidateCache.last_activity_date.desc())
+                )
+
+                # OPTIMIZATION 1: Only sync candidates with recent activity
+                if not skip_recent_activity_filter:
+                    query = query.where(
+                        or_(
+                            CandidateCache.last_activity_date >= activity_cutoff,
+                            CandidateCache.last_activity_date.is_(None)  # Include candidates without activity date
+                        )
+                    )
+
+                # OPTIMIZATION 2: Skip candidates recently synced
+                if min_hours_since_last_sync > 0:
+                    query = query.where(
+                        or_(
+                            CandidateCache.last_email_sync.is_(None),
+                            CandidateCache.last_email_sync < email_sync_cutoff
+                        )
+                    )
+
+                # Order by most recently active first
+                query = query.order_by(CandidateCache.last_activity_date.desc().nullslast())
 
                 if limit_candidates:
                     query = query.limit(limit_candidates)
@@ -1518,7 +1595,13 @@ class SyncService:
                 result = await db.execute(query)
                 candidates = result.scalars().all()
 
-                print(f"📧 Processing emails for {len(candidates)} active candidates...")
+                # Also count total active candidates for logging
+                total_query = select(CandidateCache).where(CandidateCache.stage.in_(active_stages))
+                total_result = await db.execute(total_query)
+                total_active = len(total_result.scalars().all())
+                stats["candidates_skipped"] = total_active - len(candidates)
+
+                print(f"📧 Processing {len(candidates)} candidates (skipped {stats['candidates_skipped']} due to filters, total active: {total_active})")
 
                 for candidate in candidates:
                     try:
@@ -1529,6 +1612,9 @@ class SyncService:
                         stats["emails_processed"] += candidate_stats["processed"]
                         stats["emails_created"] += candidate_stats["created"]
                         stats["emails_updated"] += candidate_stats["updated"]
+
+                        # Update last_email_sync timestamp for this candidate
+                        candidate.last_email_sync = datetime.utcnow()
 
                         # Commit every 10 candidates to avoid holding locks
                         if stats["candidates_processed"] % 10 == 0:
@@ -1553,7 +1639,8 @@ class SyncService:
 
                 await db.commit()
 
-                print(f"✅ Email sync complete: {stats['candidates_processed']} candidates, "
+                print(f"✅ Email sync complete: {stats['candidates_processed']} candidates processed, "
+                      f"{stats['candidates_skipped']} skipped, "
                       f"{stats['emails_processed']} emails ({stats['emails_created']} new, "
                       f"{stats['emails_updated']} updated)")
 
@@ -1565,6 +1652,7 @@ class SyncService:
                 raise
 
             return stats
+
 
     @classmethod
     async def _sync_emails_for_single_candidate(
@@ -1603,7 +1691,7 @@ class SyncService:
                 )
 
                 # Zoho returns emails in 'email_related_list' (not 'data' like other modules)
-                emails = response.get("email_related_list", response.get("data", []))
+                emails = response.get("Emails", response.get("Emails", response.get("email_related_list", response.get("data", []))))
                 if not emails:
                     break
 
@@ -1789,20 +1877,15 @@ class SyncService:
         if not sent_at:
             sent_at = datetime.utcnow()
 
-        # Determine direction - Zoho uses 'sent' boolean (true = outbound from CRM)
-        if data.get("sent") is True:
+        # Determine direction - check from_address for company domain
+        # The 'sent' boolean is unreliable for IMAP-synced emails
+        company_domains = ["alfasystemscv.com", "alfasystems.us"]
+        from_is_company = any(domain in from_address.lower() for domain in company_domains)
+        
+        if from_is_company:
             direction = "outbound"
-        elif data.get("sent") is False:
-            direction = "inbound"
         else:
-            # Fallback to activity type
-            activity_type = str(data.get("Activity_Type") or data.get("type") or "")
-            if activity_type.lower() in ("sent", "outbound"):
-                direction = "outbound"
-            elif activity_type.lower() in ("received", "inbound"):
-                direction = "inbound"
-            else:
-                direction = "outbound"  # Default assumption
+            direction = "inbound"
 
         # Check for attachments (Zoho uses lowercase)
         has_attachment = bool(data.get("has_attachment") or data.get("Has_Attachment") or data.get("Attachments"))

@@ -161,18 +161,27 @@ async def sync_notes(
 
 @router.post("/emails")
 async def sync_emails(
-    days_back: int = Query(30, ge=1, le=365, description="Days of email history to fetch"),
-    limit_candidates: int = Query(None, ge=1, le=1000, description="Limit number of candidates (for testing)")
+    days_back: int = Query(7, ge=1, le=365, description="Days of email history to fetch (reduced from 30 for optimization)"),
+    limit_candidates: int = Query(None, ge=1, le=1000, description="Limit number of candidates (for testing)"),
+    min_hours_since_last_sync: int = Query(6, ge=0, le=168, description="Skip candidates synced within N hours (0 to disable)"),
+    skip_recent_activity_filter: bool = Query(False, description="Set True to sync ALL active candidates (ignore activity filter)")
 ):
     """
     Sync emails from Zoho CRM for active candidates.
-    Fetches emails for each candidate and caches them locally.
+    
+    OPTIMIZED: Now uses smart filtering to reduce API calls:
+    - Only syncs candidates with activity in last `days_back` days
+    - Skips candidates already synced within `min_hours_since_last_sync` hours
+    - Use skip_recent_activity_filter=True for full sync of all active candidates
+    
     This is a batch operation - use /api/candidates/{id}/emails for on-demand fetch.
     """
     try:
         stats = await SyncService.sync_emails_from_zoho(
             days_back=days_back,
-            limit_candidates=limit_candidates
+            limit_candidates=limit_candidates,
+            min_hours_since_last_sync=min_hours_since_last_sync,
+            skip_recent_activity_filter=skip_recent_activity_filter
         )
         return {
             "success": True,
@@ -244,7 +253,7 @@ async def debug_zoho_data():
             per_page=5,
             fields=[
                 "id", "First_Name", "Last_Name", "Email",
-                "Candidate_Status", "Tier_Level", "Language"
+                "Lead_Status", "Stage", "Candidate_Stage", "Tier_Level", "Language"
             ]
         )
 
@@ -399,7 +408,7 @@ async def debug_zoho_emails(
         )
 
         # Zoho returns emails in 'email_related_list' or 'data' depending on version
-        emails = response.get("email_related_list", response.get("data", []))
+        emails = response.get("Emails", response.get("Emails", response.get("email_related_list", response.get("data", []))))
 
         return {
             "zoho_id": zoho_id,
@@ -514,3 +523,28 @@ async def debug_zoho_tasks():
                 "suggestion": "Tasks module may not be enabled or OAuth scope may not include ZohoCRM.modules.tasks.READ"
             }
         raise HTTPException(status_code=500, detail=f"Debug tasks failed: {str(e)}")
+
+
+@router.get("/debug-meetings")
+async def debug_zoho_meetings():
+    """Debug endpoint to check Zoho Meetings module."""
+    from app.integrations.zoho.crm import ZohoCRM
+    
+    try:
+        crm = ZohoCRM()
+        # Try to fetch from Meetings module
+        response = await crm.get_records(
+            module="Meetings",
+            page=1,
+            per_page=10
+        )
+        
+        records = response.get("data", [])
+        return {
+            "total": len(records),
+            "sample": records[:5] if records else [],
+            "info": response.get("info", {}),
+            "raw": response
+        }
+    except Exception as e:
+        return {"error": str(e)}

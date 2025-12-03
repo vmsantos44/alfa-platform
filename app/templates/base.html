@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Alfa AI Console{% endblock %}</title>
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'alfa': {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                            950: '#082f49',
+                        }
+                    },
+                    fontFamily: {
+                        'display': ['Söhne', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        'mono': ['Söhne Mono', 'Monaco', 'Andale Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* Smooth theme transitions */
+        * {
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+        
+        /* Sidebar hover effects */
+        .sidebar-item {
+            transition: background-color 0.15s ease;
+        }
+    </style>
+    
+    {% block head %}{% endblock %}
+</head>
+<body class="h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <script>
+        // Check for saved theme preference or default to system preference
+        if (localStorage.getItem('theme') === 'dark' || 
+            (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    
+    {% block body %}
+    <div class="h-full flex">
+        {% if user %}
+        <!-- Sidebar -->
+        <aside class="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+            <!-- Logo & New Chat -->
+            <div class="p-3">
+                <button onclick="startNewChat()" class="w-full flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 sidebar-item text-left transition-colors">
+                    <div class="w-7 h-7 rounded-full bg-black dark:bg-white flex items-center justify-center flex-shrink-0">
+                         <svg class="w-4 h-4 text-white dark:text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">New chat</span>
+                </button>
+            </div>
+            
+            <!-- Navigation -->
+            <!-- <nav class="px-3 space-y-1">
+                <a href="/chat" class="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 sidebar-item">
+                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Search chats</span>
+                </a>
+            </nav> -->
+            
+            <!-- Spacer / History -->
+            <div class="flex-1 overflow-y-auto px-3 py-2">
+                <div class="text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider px-3 mb-2">
+                    Recent
+                </div>
+                
+                <div class="space-y-1">
+                {% if sessions %}
+                    {% for session in sessions %}
+                    <div class="group relative flex items-center rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 sidebar-item {% if current_session and current_session.id == session.id %}bg-gray-200 dark:bg-gray-800{% endif %}">
+                        <a href="/chat?session_id={{ session.id }}" class="flex-1 flex items-center space-x-2 px-3 py-2 overflow-hidden">
+                            <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                            </svg>
+                            <span class="text-sm text-gray-700 dark:text-gray-300 truncate">{{ session.title }}</span>
+                        </a>
+                        
+                        <!-- Delete Button (visible on hover) -->
+                        <button 
+                            onclick="deleteSession(event, {{ session.id }})"
+                            class="opacity-0 group-hover:opacity-100 p-1 mr-2 text-gray-400 hover:text-red-500 transition-opacity"
+                            title="Delete chat"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-sm text-gray-500 dark:text-gray-500 px-3 py-2 italic">
+                        No history yet
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+            
+            <!-- Bottom Section -->
+            <div class="p-3 border-t border-gray-200 dark:border-gray-800 space-y-1">
+                <!-- Settings -->
+                <a href="/settings" class="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 sidebar-item">
+                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Settings</span>
+                </a>
+                
+                <!-- Theme Toggle -->
+                <button id="theme-toggle" class="w-full flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 sidebar-item">
+                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                    </svg>
+                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    <span class="text-sm text-gray-700 dark:text-gray-300 dark:hidden">Dark mode</span>
+                    <span class="text-sm text-gray-700 dark:text-gray-300 hidden dark:inline">Light mode</span>
+                </button>
+                
+                <!-- User & Logout -->
+                <div class="flex items-center justify-between px-3 py-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center">
+                            <span class="text-white text-xs font-medium">{{ user.email[0]|upper }}</span>
+                        </div>
+                        <span class="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[120px]">{{ user.email.split('@')[0] }}</span>
+                    </div>
+                    <a href="/logout" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" title="Logout">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </aside>
+        {% endif %}
+        
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% endblock %}
+    
+    <script>
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', 
+                    document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+                );
+            });
+        }
+        
+        // New chat function
+        function startNewChat() {
+            window.location.href = '/chat';
+        }
+        
+        // Delete session
+        async function deleteSession(event, sessionId) {
+            event.preventDefault(); // Prevent link click
+            event.stopPropagation();
+            
+            if (!confirm('Delete this chat?')) return;
+            
+            try {
+                await fetch(`/api/chat/${sessionId}`, { method: 'DELETE' });
+                window.location.reload();
+            } catch (error) {
+                console.error('Error deleting session:', error);
+            }
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - Alfa AI Console{% endblock %}
+
+{% block content %}
+<div class="flex-1 overflow-y-auto">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <div class="mb-8">
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-1">User Management</h1>
+            <p class="text-gray-600 dark:text-gray-400">Manage user accounts and permissions.</p>
+        </div>
+        
+        <!-- Success/Error Messages -->
+        {% if success %}
+        <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+            <p class="text-green-600 dark:text-green-400 text-sm flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                {{ success }}
+            </p>
+        </div>
+        {% endif %}
+        
+        {% if error %}
+        <div class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+            <p class="text-red-600 dark:text-red-400 text-sm flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                {{ error }}
+            </p>
+        </div>
+        {% endif %}
+        
+        <!-- Add New User -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Add New User
+            </h2>
+            
+            <form method="POST" action="/settings/users/add" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+                        <input 
+                            type="email" 
+                            name="email" 
+                            required
+                            class="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                            placeholder="user@example.com"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+                        <input 
+                            type="password" 
+                            name="password" 
+                            required
+                            minlength="6"
+                            class="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                            placeholder="Minimum 6 characters"
+                        >
+                    </div>
+                </div>
+                
+                <div class="flex items-center">
+                    <input 
+                        type="checkbox" 
+                        name="is_admin" 
+                        id="is_admin_new"
+                        class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    >
+                    <label for="is_admin_new" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Admin privileges
+                    </label>
+                </div>
+                
+                <button 
+                    type="submit"
+                    class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                    Create User
+                </button>
+            </form>
+        </div>
+        
+        <!-- Users List -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-6">
+            <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                All Users ({{ users|length }})
+            </h2>
+            
+            <div class="space-y-4">
+                {% for u in users %}
+                <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <h3 class="font-medium text-gray-900 dark:text-white">{{ u.email }}</h3>
+                                {% if u.is_admin %}
+                                <span class="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 rounded-full">
+                                    Admin
+                                </span>
+                                {% endif %}
+                                {% if u.id == user.id %}
+                                <span class="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded-full">
+                                    You
+                                </span>
+                                {% endif %}
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Created: {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else 'N/A' }}
+                            </p>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <!-- Edit Button -->
+                            <button 
+                                onclick="openEditModal({{ u.id }}, '{{ u.email }}', {{ 'true' if u.is_admin else 'false' }})"
+                                class="px-3 py-1.5 text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                            >
+                                Edit
+                            </button>
+                            
+                            <!-- Reset Password Button -->
+                            <button 
+                                onclick="openPasswordModal({{ u.id }}, '{{ u.email }}')"
+                                class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                                Reset Password
+                            </button>
+                            
+                            <!-- Delete Button -->
+                            {% if u.id != user.id %}
+                            <form method="POST" action="/settings/users/delete/{{ u.id }}" class="inline" onsubmit="return confirm('Are you sure you want to delete {{ u.email }}? This cannot be undone.');">
+                                <button 
+                                    type="submit"
+                                    class="px-3 py-1.5 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                >
+                                    Delete
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Edit User</h3>
+        <form method="POST" id="editForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+                <input 
+                    type="email" 
+                    name="email" 
+                    id="edit_email"
+                    required
+                    class="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                >
+            </div>
+            
+            <div class="flex items-center">
+                <input 
+                    type="checkbox" 
+                    name="is_admin" 
+                    id="edit_is_admin"
+                    class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                >
+                <label for="edit_is_admin" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Admin privileges
+                </label>
+            </div>
+            
+            <div class="flex gap-3">
+                <button 
+                    type="submit"
+                    class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                    Save Changes
+                </button>
+                <button 
+                    type="button"
+                    onclick="closeEditModal()"
+                    class="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium transition-colors"
+                >
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="passwordModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Reset Password</h3>
+        <form method="POST" id="passwordForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Password</label>
+                <input 
+                    type="password" 
+                    name="new_password" 
+                    id="reset_password"
+                    required
+                    minlength="6"
+                    class="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                    placeholder="Minimum 6 characters"
+                >
+            </div>
+            
+            <div class="flex gap-3">
+                <button 
+                    type="submit"
+                    class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                    Reset Password
+                </button>
+                <button 
+                    type="button"
+                    onclick="closePasswordModal()"
+                    class="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium transition-colors"
+                >
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditModal(userId, email, isAdmin) {
+    document.getElementById('edit_email').value = email;
+    document.getElementById('edit_is_admin').checked = isAdmin === 'true';
+    document.getElementById('editForm').action = `/settings/users/edit/${userId}`;
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
+
+function openPasswordModal(userId, email) {
+    document.getElementById('reset_password').value = '';
+    document.getElementById('passwordForm').action = `/settings/users/reset-password/${userId}`;
+    document.getElementById('passwordModal').classList.remove('hidden');
+}
+
+function closePasswordModal() {
+    document.getElementById('passwordModal').classList.add('hidden');
+}
+
+// Close modals on outside click
+document.getElementById('editModal')?.addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+
+document.getElementById('passwordModal')?.addEventListener('click', function(e) {
+    if (e.target === this) closePasswordModal();
+});
+</script>
+{% endblock %}
+

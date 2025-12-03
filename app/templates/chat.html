@@ -1,0 +1,946 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Alfa AI Console{% endblock %}
+
+{% block head %}
+<style>
+    .message-user {
+        background: #f3f4f6;
+    }
+    .dark .message-user {
+        background: #374151;
+    }
+    .message-assistant {
+        background: transparent;
+    }
+    .streaming-cursor::after {
+        content: '▌';
+        animation: blink 1s step-end infinite;
+        color: #6b7280;
+    }
+    @keyframes blink {
+        50% { opacity: 0; }
+    }
+    .prose code {
+        background: rgba(0, 0, 0, 0.05);
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        font-size: 0.875em;
+    }
+    .dark .prose code {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    .prose pre {
+        background: #1e1e1e;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+    }
+    .prose pre code {
+        background: transparent;
+        padding: 0;
+        color: #d4d4d4;
+    }
+    
+    /* Input container styles */
+    .input-container {
+        background: #f4f4f4;
+        border: 1px solid #e5e5e5;
+    }
+    .dark .input-container {
+        background: #2f2f2f;
+        border: 1px solid #424242;
+    }
+    .input-container:focus-within {
+        border-color: #a3a3a3;
+    }
+    .dark .input-container:focus-within {
+        border-color: #525252;
+    }
+    
+    /* File preview */
+    .file-preview {
+        background: rgba(0, 0, 0, 0.05);
+    }
+    .dark .file-preview {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Candidate panel */
+    .candidate-panel {
+        width: 320px;
+        min-width: 320px;
+        border-left: 1px solid #e5e7eb;
+    }
+    .dark .candidate-panel {
+        border-left-color: #374151;
+    }
+    
+    /* Candidate cards */
+    .candidate-card {
+        transition: all 0.15s ease;
+    }
+    .candidate-card:hover {
+        transform: translateX(2px);
+        border-color: #6366f1;
+    }
+    
+    /* Scrollbar for candidates */
+    .candidates-scroll::-webkit-scrollbar {
+        width: 4px;
+    }
+    .candidates-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .candidates-scroll::-webkit-scrollbar-thumb {
+        background: #d1d5db;
+        border-radius: 2px;
+    }
+    .dark .candidates-scroll::-webkit-scrollbar-thumb {
+        background: #4b5563;
+    }
+    
+    /* Slash Commands Dropdown */
+    .slash-commands-dropdown {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        right: 0;
+        margin-bottom: 8px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 50;
+    }
+    .dark .slash-commands-dropdown {
+        background: #1f2937;
+        border-color: #374151;
+    }
+    .slash-command-item {
+        padding: 10px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: background-color 0.1s;
+    }
+    .slash-command-item:first-child {
+        border-radius: 12px 12px 0 0;
+    }
+    .slash-command-item:last-child {
+        border-radius: 0 0 12px 12px;
+    }
+    .slash-command-item:only-child {
+        border-radius: 12px;
+    }
+    .slash-command-item:hover,
+    .slash-command-item.selected {
+        background: #f3f4f6;
+    }
+    .dark .slash-command-item:hover,
+    .dark .slash-command-item.selected {
+        background: #374151;
+    }
+    .slash-command-cmd {
+        font-weight: 600;
+        color: #6366f1;
+        font-family: monospace;
+        font-size: 14px;
+    }
+    .slash-command-desc {
+        color: #6b7280;
+        font-size: 13px;
+    }
+    .dark .slash-command-desc {
+        color: #9ca3af;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex-1 flex h-full">
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col h-full min-w-0">
+        <!-- Chat Messages -->
+        <div id="chat-container" class="flex-1 overflow-y-auto">
+            <div class="max-w-3xl mx-auto px-4 py-8">
+                {% if not messages %}
+                <!-- Welcome Message -->
+                <div id="welcome-message" class="text-center py-16">
+                    <h1 class="text-3xl font-semibold text-gray-900 dark:text-white mb-8">
+                        How can I help, {{ user.email.split('@')[0]|title }}?
+                    </h1>
+                </div>
+                {% endif %}
+                
+                <!-- Message History -->
+                <div id="messages" class="space-y-6 {% if not messages %}hidden{% endif %}">
+                    {% for message in messages %}
+                    <div class="flex {% if message.role == 'user' %}justify-end{% else %}justify-start{% endif %}">
+                        <div class="flex items-start space-x-3 max-w-[85%] {% if message.role == 'user' %}flex-row-reverse space-x-reverse{% endif %}">
+                            {% if message.role == 'assistant' %}
+                            <div class="w-8 h-8 rounded-full bg-black dark:bg-white flex-shrink-0 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white dark:text-black" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                            {% else %}
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex-shrink-0 flex items-center justify-center">
+                                <span class="text-white text-xs font-medium">{{ user.email[0]|upper }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="{% if message.role == 'user' %}message-user rounded-3xl px-4 py-2{% else %}py-1{% endif %}">
+                                <div class="prose dark:prose-invert prose-sm max-w-none">
+                                    <div class="whitespace-pre-wrap text-gray-900 dark:text-gray-100">{{ message.content }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Streaming Response Container -->
+                <div id="streaming-container" class="hidden mt-6">
+                    <div class="flex justify-start">
+                        <div class="flex items-start space-x-3 max-w-[85%]">
+                            <div class="w-8 h-8 rounded-full bg-black dark:bg-white flex-shrink-0 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white dark:text-black" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                            <div class="py-1">
+                                <div class="prose dark:prose-invert prose-sm max-w-none">
+                                    <div id="streaming-content" class="whitespace-pre-wrap text-gray-900 dark:text-gray-100 streaming-cursor"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="p-4 pb-6">
+            <div class="max-w-3xl mx-auto">
+                <!-- File Preview Area -->
+                <div id="file-preview-area" class="hidden mb-3 flex flex-wrap gap-2">
+                </div>
+                
+                <form id="chat-form">
+                    <input type="hidden" id="session-id" name="session_id" value="{{ current_session.id if current_session else '' }}">
+                    
+                    <div class="input-container rounded-3xl px-4 py-3 flex items-end space-x-3 relative">
+                        <!-- Slash Commands Dropdown -->
+                        <div id="slash-commands-dropdown" class="slash-commands-dropdown hidden"></div>
+                        <!-- File Input (hidden) -->
+                        <input type="file" id="file-input" class="hidden" accept="image/*,.pdf,.txt,.md,.json,.csv" multiple>
+                        
+                        <!-- Attach Button -->
+                        <button type="button" id="attach-btn" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 p-1 flex-shrink-0" title="Attach file">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                        </button>
+                        
+                        <textarea 
+                            id="message-input"
+                            name="message"
+                            rows="1"
+                            placeholder="Ask anything"
+                            class="flex-1 bg-transparent border-none outline-none resize-none text-gray-900 dark:text-white placeholder-gray-500 text-base"
+                            style="min-height: 24px; max-height: 200px;"
+                        ></textarea>
+                        
+                        <div class="flex items-center space-x-2 flex-shrink-0">
+                            <button 
+                                type="submit"
+                                id="send-btn"
+                                class="bg-black dark:bg-white text-white dark:text-black rounded-full p-2 hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <p class="text-xs text-center text-gray-500 mt-3">
+                    Alfa AI can make mistakes. Consider checking important information.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Side Candidate Panel (Always Visible) -->
+    <div class="candidate-panel bg-gray-50 dark:bg-gray-900 flex flex-col h-full">
+        <!-- Panel Header -->
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                My Candidates
+            </h3>
+            <!-- Engagement Legend -->
+            <div class="flex items-center gap-3 text-xs text-gray-500">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span> Active</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> Pending</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> No reply</span>
+            </div>
+        </div>
+        
+        <!-- Search -->
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+            <div class="relative">
+                <input 
+                    type="text" 
+                    id="candidate-search" 
+                    placeholder="Search..." 
+                    class="w-full px-3 py-2 pl-9 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700 space-y-2">
+            <select id="filter-stage" class="w-full px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">All Stages</option>
+                <option value="Application Review">Application Review</option>
+                <option value="Interpreter Interview">Interpreter Interview</option>
+                <option value="Interpreter Language Assessment">Interpreter Language Assessment</option>
+                <option value="Interpreter System Specs Review">Interpreter System Specs Review</option>
+                <option value="Contract & Payment Setup (Interpreter)">Contract & Payment Setup</option>
+                <option value="Training Required (Client/Tier)">Training Required</option>
+                <option value="Credentials Ordered (Interpreter)">Credentials Ordered</option>
+                <option value="Client Tool Orientation">Client Tool Orientation</option>
+                <option value="Interpreter Ready for Production">Ready for Production</option>
+                <option value="Inactive / Not Moving Forward">Inactive / Not Moving Forward</option>
+            </select>
+            <select id="filter-owner" class="w-full px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">All Recruiters</option>
+                <option value="Esther Michuki">Esther Michuki</option>
+                <option value="Fabio Brito">Fabio Brito</option>
+                <option value="Khoudia Ndiaye">Khoudia Ndiaye</option>
+                <option value="Naima Rocha">Naima Rocha</option>
+                <option value="Rafael Vicente">Rafael Vicente</option>
+                <option value="Alfa Systems Recruitment">Recruitment</option>
+                <option value="Sara Gomes">Sara Gomes</option>
+                <option value="Victor Santos">Victor Santos</option>
+            </select>
+        </div>
+        
+        <!-- Candidates List -->
+        <div class="flex-1 overflow-y-auto candidates-scroll p-3 space-y-2">
+            <!-- Loading state -->
+            <div id="candidates-loading" class="flex flex-col items-center justify-center py-8 text-gray-500 text-sm">
+                <svg class="animate-spin w-6 h-6 mb-2" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Loading...
+            </div>
+            
+            <!-- Empty state -->
+            <div id="candidates-empty" class="hidden flex flex-col items-center justify-center py-8 text-gray-500 text-sm">
+                <svg class="w-12 h-12 mb-2 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                </svg>
+                No candidates found
+            </div>
+            
+            <!-- Candidate cards container -->
+            <div id="candidates-list" class="space-y-2"></div>
+        </div>
+        
+        <!-- Panel Footer -->
+        <div id="candidates-count" class="p-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 text-center hidden">
+            Showing <span id="count-number">0</span> candidates
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const messagesContainer = document.getElementById('messages');
+    const streamingContainer = document.getElementById('streaming-container');
+    const streamingContent = document.getElementById('streaming-content');
+    const chatContainer = document.getElementById('chat-container');
+    const welcomeMessage = document.getElementById('welcome-message');
+    const fileInput = document.getElementById('file-input');
+    const attachBtn = document.getElementById('attach-btn');
+    const filePreviewArea = document.getElementById('file-preview-area');
+    const sessionIdInput = document.getElementById('session-id');
+    
+    let attachedFiles = [];
+    
+    // ========================================
+    // SLASH COMMANDS
+    // ========================================
+    
+    const SLASH_COMMANDS = [
+        { cmd: '/review', desc: 'Full candidate review with notes & recommendations', template: 'Review ' },
+        { cmd: '/notes', desc: 'Show only candidate notes', template: 'Show me only the notes for ' },
+        { cmd: '/draft-email', desc: 'Draft a follow-up email', template: 'Draft a follow-up email for ' },
+        { cmd: '/draft-sms', desc: 'Draft an SMS message', template: 'Draft an SMS for ' },
+        { cmd: '/status', desc: 'Check current status & next steps', template: 'What is the current status and next steps for ' },
+        { cmd: '/docs', desc: 'Check missing documents', template: 'What documents are missing for ' },
+        { cmd: '/tasks', desc: 'Show open tasks', template: 'Show open tasks for ' },
+        { cmd: '/comms', desc: 'Show communication history', template: 'Show all communications for ' },
+    ];
+    
+    const slashDropdown = document.getElementById('slash-commands-dropdown');
+    let slashSelectedIndex = 0;
+    let slashVisible = false;
+    let filteredCommands = [];
+    
+    function showSlashCommands(filter = '') {
+        // Filter commands based on what user typed after /
+        filteredCommands = SLASH_COMMANDS.filter(c => 
+            c.cmd.toLowerCase().includes(filter.toLowerCase()) ||
+            c.desc.toLowerCase().includes(filter.toLowerCase())
+        );
+        
+        if (filteredCommands.length === 0) {
+            hideSlashCommands();
+            return;
+        }
+        
+        slashSelectedIndex = 0;
+        slashDropdown.innerHTML = filteredCommands.map((cmd, i) => `
+            <div class="slash-command-item ${i === 0 ? 'selected' : ''}" data-index="${i}">
+                <span class="slash-command-cmd">${escapeHtml(cmd.cmd)}</span>
+                <span class="slash-command-desc">${escapeHtml(cmd.desc)}</span>
+            </div>
+        `).join('');
+        
+        // Add click handlers
+        slashDropdown.querySelectorAll('.slash-command-item').forEach(item => {
+            item.addEventListener('click', () => {
+                selectSlashCommand(parseInt(item.dataset.index));
+            });
+        });
+        
+        slashDropdown.classList.remove('hidden');
+        slashVisible = true;
+    }
+    
+    function hideSlashCommands() {
+        slashDropdown.classList.add('hidden');
+        slashVisible = false;
+        filteredCommands = [];
+    }
+    
+    function updateSlashSelection() {
+        slashDropdown.querySelectorAll('.slash-command-item').forEach((item, i) => {
+            item.classList.toggle('selected', i === slashSelectedIndex);
+        });
+        // Scroll selected item into view
+        const selected = slashDropdown.querySelector('.selected');
+        if (selected) {
+            selected.scrollIntoView({ block: 'nearest' });
+        }
+    }
+    
+    function selectSlashCommand(index) {
+        const cmd = filteredCommands[index];
+        if (!cmd) return;
+        
+        // Replace input with template - cursor will be at end for user to type name
+        input.value = cmd.template;
+        hideSlashCommands();
+        
+        // Focus at end so user can type the candidate name
+        input.focus();
+        input.setSelectionRange(cmd.template.length, cmd.template.length);
+        
+        // Trigger resize
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+    }
+    
+    // Auto-resize textarea
+    input.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        
+        // Check for slash commands
+        const value = this.value;
+        if (value.startsWith('/')) {
+            const filter = value.slice(1).split(' ')[0]; // Get text after / before space
+            if (!value.includes(' ')) {
+                showSlashCommands(filter);
+            } else {
+                hideSlashCommands();
+            }
+        } else {
+            hideSlashCommands();
+        }
+    });
+    
+    // Handle Enter key
+    input.addEventListener('keydown', function(e) {
+        // Handle slash command navigation
+        if (slashVisible) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                slashSelectedIndex = Math.min(slashSelectedIndex + 1, filteredCommands.length - 1);
+                updateSlashSelection();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                slashSelectedIndex = Math.max(slashSelectedIndex - 1, 0);
+                updateSlashSelection();
+                return;
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                selectSlashCommand(slashSelectedIndex);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                hideSlashCommands();
+                return;
+            }
+        }
+        
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+        }
+    });
+    
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !slashDropdown.contains(e.target)) {
+            hideSlashCommands();
+        }
+    });
+    
+    // Scroll to bottom
+    function scrollToBottom() {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    // Get user initial
+    const userEmail = "{{ user.email }}";
+    const userInitial = userEmail[0].toUpperCase();
+    
+    // Show messages container, hide welcome
+    function showMessagesContainer() {
+        if (welcomeMessage) {
+            welcomeMessage.classList.add('hidden');
+        }
+        messagesContainer.classList.remove('hidden');
+    }
+    
+    // Add message to UI
+    function addMessage(content, role) {
+        showMessagesContainer();
+        
+        const isUser = role === 'user';
+        const div = document.createElement('div');
+        div.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+        
+        if (isUser) {
+            div.innerHTML = `
+                <div class="flex items-start space-x-3 max-w-[85%] flex-row-reverse space-x-reverse">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex-shrink-0 flex items-center justify-center">
+                        <span class="text-white text-xs font-medium">${userInitial}</span>
+                    </div>
+                    <div class="message-user rounded-3xl px-4 py-2">
+                        <div class="prose dark:prose-invert prose-sm max-w-none">
+                            <div class="whitespace-pre-wrap text-gray-900 dark:text-gray-100">${escapeHtml(content)}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            div.innerHTML = `
+                <div class="flex items-start space-x-3 max-w-[85%]">
+                    <div class="w-8 h-8 rounded-full bg-black dark:bg-white flex-shrink-0 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white dark:text-black" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <div class="py-1">
+                        <div class="prose dark:prose-invert prose-sm max-w-none">
+                            <div class="whitespace-pre-wrap text-gray-900 dark:text-gray-100">${renderMarkdownLinks(escapeHtml(content))}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        messagesContainer.appendChild(div);
+        scrollToBottom();
+    }
+    
+    // Escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Convert markdown links [text](url) to clickable HTML links
+    function renderMarkdownLinks(text) {
+        return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-500 hover:text-blue-600 underline">$1</a>');
+    }
+    
+    // File attachment handling
+    attachBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        files.forEach(file => {
+            if (attachedFiles.length < 5) { // Max 5 files
+                attachedFiles.push(file);
+                addFilePreview(file);
+            }
+        });
+        fileInput.value = ''; // Reset input
+    });
+    
+    function addFilePreview(file) {
+        filePreviewArea.classList.remove('hidden');
+        
+        const preview = document.createElement('div');
+        preview.className = 'file-preview flex items-center space-x-2 px-3 py-2 rounded-lg text-sm';
+        
+        const isImage = file.type.startsWith('image/');
+        
+        if (isImage) {
+            const img = document.createElement('img');
+            img.className = 'w-8 h-8 object-cover rounded';
+            img.src = URL.createObjectURL(file);
+            preview.appendChild(img);
+        } else {
+            const icon = document.createElement('span');
+            icon.innerHTML = `<svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>`;
+            preview.appendChild(icon);
+        }
+        
+        const name = document.createElement('span');
+        name.className = 'text-gray-700 dark:text-gray-300 truncate max-w-[150px]';
+        name.textContent = file.name;
+        preview.appendChild(name);
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'text-gray-400 hover:text-red-500 ml-1';
+        removeBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>`;
+        removeBtn.onclick = () => {
+            attachedFiles = attachedFiles.filter(f => f !== file);
+            preview.remove();
+            if (attachedFiles.length === 0) {
+                filePreviewArea.classList.add('hidden');
+            }
+        };
+        preview.appendChild(removeBtn);
+        
+        filePreviewArea.appendChild(preview);
+    }
+    
+    // Handle form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const message = input.value.trim();
+        if (!message && attachedFiles.length === 0) return;
+        
+        // Build message with file info
+        let displayMessage = message;
+        if (attachedFiles.length > 0) {
+            const fileNames = attachedFiles.map(f => f.name).join(', ');
+            displayMessage = message + (message ? '\n' : '') + `📎 ${fileNames}`;
+        }
+        
+        // Add user message
+        addMessage(displayMessage, 'user');
+        
+        // Clear input and files
+        input.value = '';
+        input.style.height = 'auto';
+        attachedFiles = [];
+        filePreviewArea.innerHTML = '';
+        filePreviewArea.classList.add('hidden');
+        
+        // Disable send button
+        sendBtn.disabled = true;
+        
+        // Show streaming container
+        streamingContainer.classList.remove('hidden');
+        streamingContent.textContent = '';
+        scrollToBottom();
+        
+        try {
+            // Create form data
+            const formData = new FormData();
+            formData.append('message', message);
+            formData.append('session_id', sessionIdInput.value);
+            
+            // Use EventSource-like approach with fetch for SSE
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullContent = '';
+            let buffer = '';
+            let currentSessionId = null;
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    console.log('Stream ended');
+                    // Reload sidebar or update URL if new session
+                    if (currentSessionId && !sessionIdInput.value) {
+                         window.history.pushState({}, '', `/chat?session_id=${currentSessionId}`);
+                         // Could reload sidebar here if HTMX
+                         setTimeout(() => window.location.reload(), 1000); // Simple refresh to show new chat in sidebar
+                    }
+                    break;
+                }
+                
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                
+                const messages = buffer.split('\n\n');
+                buffer = messages.pop() || '';
+                
+                for (const msg of messages) {
+                    if (!msg.trim()) continue;
+                    
+                    const lines = msg.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const dataStr = line.substring(5).trim();
+                            if (dataStr) {
+                                try {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if (data.session_id) {
+                                        currentSessionId = data.session_id;
+                                        sessionIdInput.value = data.session_id;
+                                    }
+                                    
+                                    if (data.content) {
+                                        fullContent += data.content;
+                                        streamingContent.innerHTML = renderMarkdownLinks(escapeHtml(fullContent));
+                                        scrollToBottom();
+                                    }
+                                    
+                                    if (data.error) {
+                                        console.error('Server error:', data.error);
+                                        fullContent = 'Error: ' + data.error;
+                                    }
+                                } catch (parseErr) {
+                                    console.log('JSON parse error:', parseErr);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Hide streaming container and add final message
+            streamingContainer.classList.add('hidden');
+            if (fullContent) {
+                addMessage(fullContent, 'assistant');
+            }
+            
+        } catch (error) {
+            console.error('Fetch error:', error);
+            streamingContainer.classList.add('hidden');
+            addMessage('Sorry, an error occurred: ' + error.message, 'assistant');
+        }
+        
+        // Re-enable send button
+        sendBtn.disabled = false;
+        input.focus();
+    });
+    
+    // Initial scroll
+    scrollToBottom();
+    
+    // Process server-rendered messages to convert markdown links
+    document.querySelectorAll('#messages .whitespace-pre-wrap').forEach(el => {
+        // Only process assistant messages (not in message-user container)
+        if (!el.closest('.message-user')) {
+            el.innerHTML = renderMarkdownLinks(el.innerHTML);
+        }
+    });
+    
+    // ========================================
+    // CANDIDATES PANEL FUNCTIONALITY
+    // ========================================
+    
+    const candidatesList = document.getElementById('candidates-list');
+    const candidatesLoading = document.getElementById('candidates-loading');
+    const candidatesEmpty = document.getElementById('candidates-empty');
+    const candidatesCount = document.getElementById('candidates-count');
+    const countNumber = document.getElementById('count-number');
+    const candidateSearch = document.getElementById('candidate-search');
+    const filterStage = document.getElementById('filter-stage');
+    const filterOwner = document.getElementById('filter-owner');
+    
+    let searchTimeout = null;
+    let currentFilters = { stage: '', search: '', owner: '' };
+    
+    // Fetch candidates
+    async function fetchCandidates() {
+        candidatesLoading.classList.remove('hidden');
+        candidatesEmpty.classList.add('hidden');
+        candidatesCount.classList.add('hidden');
+        candidatesList.innerHTML = '';
+        
+        try {
+            const params = new URLSearchParams({ page: 1, limit: 100 });
+            if (currentFilters.stage) params.append('stage', currentFilters.stage);
+            if (currentFilters.search) params.append('search', currentFilters.search);
+            // Always include owner - empty string means "All Recruiters"
+            params.append('owner', currentFilters.owner || '');
+            
+            const response = await fetch(`/api/candidates/sidebar-list?${params}`);
+            const data = await response.json();
+            
+            candidatesLoading.classList.add('hidden');
+            
+            if (data.candidates && data.candidates.length > 0) {
+                renderCandidates(data.candidates);
+                countNumber.textContent = data.candidates.length;
+                candidatesCount.classList.remove('hidden');
+            } else {
+                candidatesEmpty.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error fetching candidates:', error);
+            candidatesLoading.classList.add('hidden');
+            candidatesEmpty.classList.remove('hidden');
+            candidatesEmpty.innerHTML = `
+                <svg class="w-12 h-12 mb-2 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span class="text-red-500">Error loading</span>
+            `;
+        }
+    }
+    
+    // Render candidates
+    function renderCandidates(candidates) {
+        candidatesList.innerHTML = '';
+        
+        candidates.forEach(candidate => {
+            const card = document.createElement('div');
+            card.className = 'candidate-card p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer';
+            card.setAttribute('data-record-id', candidate.id);
+            card.setAttribute('data-module', candidate.module);
+            
+            // Engagement indicator
+            const engagementColor = {
+                'high': 'bg-green-500',
+                'medium': 'bg-yellow-500',
+                'low': 'bg-red-500'
+            }[candidate.engagement] || 'bg-gray-400';
+            
+            // Status badges
+            const badges = (candidate.status_indicators || []).slice(0, 2).map(indicator => {
+                const colors = {
+                    'missing_documents': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+                    'unresponsive': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                    'training_required': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+                    'credentials_pending': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+                    'specs_failed': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                    'upcoming_interview': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                };
+                const labels = {
+                    'missing_documents': 'Docs',
+                    'unresponsive': 'No Reply',
+                    'training_required': 'Training',
+                    'credentials_pending': 'Creds',
+                    'specs_failed': 'Specs',
+                    'upcoming_interview': 'Interview'
+                };
+                return `<span class="px-1.5 py-0.5 text-xs rounded ${colors[indicator] || 'bg-gray-100 text-gray-800'}">${labels[indicator] || indicator}</span>`;
+            }).join('');
+            
+            card.innerHTML = `
+                <div class="flex items-start justify-between mb-1">
+                    <div class="font-medium text-sm text-gray-900 dark:text-white truncate flex-1 pr-2">${escapeHtml(candidate.name)}</div>
+                    <div class="w-2 h-2 rounded-full ${engagementColor} flex-shrink-0 mt-1" title="${candidate.engagement} engagement"></div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">${escapeHtml(candidate.email || '')}</div>
+                ${candidate.stage ? `<div class="text-xs text-indigo-600 dark:text-indigo-400 truncate mb-1">${escapeHtml(candidate.stage)}</div>` : ''}
+                ${badges ? `<div class="flex gap-1 flex-wrap">${badges}</div>` : ''}
+            `;
+            
+            // Click to fill candidate info in chat input (doesn't auto-send)
+            card.addEventListener('click', () => {
+                input.value = `Look up ${candidate.name} (ID:${candidate.id})`;
+                input.focus();
+                // Trigger resize for textarea
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+            });
+            
+            candidatesList.appendChild(card);
+        });
+    }
+    
+    // Search with debounce
+    if (candidateSearch) {
+        candidateSearch.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentFilters.search = e.target.value;
+                fetchCandidates();
+            }, 300);
+        });
+    }
+    
+    // Filter handlers
+    if (filterStage) {
+        filterStage.addEventListener('change', (e) => {
+            currentFilters.stage = e.target.value;
+            fetchCandidates();
+        });
+    }
+    
+    // Owner filter dropdown
+    if (filterOwner) {
+        filterOwner.addEventListener('change', (e) => {
+            currentFilters.owner = e.target.value;
+            fetchCandidates();
+        });
+    }
+    
+    // Initial load
+    fetchCandidates();
+});
+</script>
+{% endblock %}

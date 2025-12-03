@@ -5,7 +5,7 @@ Manage candidates through recruitment stages
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -701,6 +701,48 @@ async def delete_candidate_note(
     await db.commit()
 
     return SuccessResponse(message="Note deleted successfully")
+
+
+@router.delete("/{candidate_id}", response_model=SuccessResponse)
+async def delete_candidate(
+    candidate_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a candidate and all related data (emails, notes) from the local cache.
+    
+    Note: This only removes the candidate from the local platform database.
+    It does NOT delete the candidate from Zoho CRM.
+    """
+    from app.models.database_models import CandidateEmail, CrmNote
+    
+    # Find the candidate
+    result = await db.execute(
+        select(CandidateCache).where(CandidateCache.id == candidate_id)
+    )
+    candidate = result.scalar_one_or_none()
+    
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    zoho_id = candidate.zoho_id
+    candidate_name = candidate.full_name
+    
+    # Delete related emails
+    await db.execute(
+        delete(CandidateEmail).where(CandidateEmail.zoho_candidate_id == zoho_id)
+    )
+    
+    # Delete related CRM notes
+    await db.execute(
+        delete(CrmNote).where(CrmNote.zoho_candidate_id == zoho_id)
+    )
+    
+    # Delete the candidate
+    await db.delete(candidate)
+    await db.commit()
+    
+    return SuccessResponse(message=f"Candidate '{candidate_name}' and all related data deleted successfully")
 
 
 @router.get("/zoho/{zoho_id}", response_model=CandidateResponse)
