@@ -4,7 +4,7 @@ Sync data between Zoho CRM and local database
 """
 from fastapi import APIRouter, HTTPException, Query
 from app.services.sync import SyncService
-from app.services.scheduler import get_scheduler
+from app.services.scheduler import SchedulerService
 from app.models.schemas import SyncStatus, SuccessResponse
 
 router = APIRouter()
