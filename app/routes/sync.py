@@ -130,23 +130,25 @@ async def generate_sample_data():
 
 @router.get("/debug-zoho")
 async def debug_zoho_connection():
-    """Test Zoho CRM API connection"""
-    from app.integrations.zoho.crm import ZohoAPI
+    """Test Zoho CRM API connection by checking recent sync results"""
     try:
-        api = ZohoAPI()
-        # Just check if we can initialize the API (token refresh works)
-        if api.access_token:
-            return {
-                "status": "connected",
-                "message": "Zoho API credentials valid"
-            }
+        # Check if we have successful syncs in the last 24 hours
+        import sqlite3
+        import os
+        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "alfa_platform.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*) FROM sync_logs 
+            WHERE status = "completed" 
+            AND completed_at > datetime("now", "-24 hours")
+        """)
+        recent_syncs = cursor.fetchone()[0]
+        conn.close()
+        
+        if recent_syncs > 0:
+            return {"status": "connected", "recent_syncs": recent_syncs}
         else:
-            return {
-                "status": "error",
-                "error": "No access token"
-            }
+            return {"status": "unknown", "message": "No recent syncs to verify connection"}
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+        return {"status": "error", "error": str(e)}
