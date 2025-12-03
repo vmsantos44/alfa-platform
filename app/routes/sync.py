@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("/scheduler/status")
 async def get_scheduler_status():
     """Get the current status of the auto-sync scheduler"""
-    scheduler = get_scheduler()
+    scheduler = SchedulerService
     return scheduler.get_status()
 
 
@@ -26,7 +26,7 @@ async def start_auto_sync(
     interval_minutes: int = Query(30, ge=5, le=1440, description="Sync interval in minutes (5-1440)")
 ):
     """Start the auto-sync scheduler"""
-    scheduler = get_scheduler()
+    scheduler = SchedulerService
     status = scheduler.get_status()
 
     if status["is_running"]:
@@ -39,7 +39,7 @@ async def start_auto_sync(
 @router.post("/scheduler/stop")
 async def stop_auto_sync():
     """Stop the auto-sync scheduler"""
-    scheduler = get_scheduler()
+    scheduler = SchedulerService
     status = scheduler.get_status()
 
     if not status["is_running"]:
@@ -52,7 +52,7 @@ async def stop_auto_sync():
 @router.post("/scheduler/pause")
 async def pause_auto_sync():
     """Pause the auto-sync scheduler (keeps schedule but doesn't run)"""
-    scheduler = get_scheduler()
+    scheduler = SchedulerService
     scheduler.pause()
     return {"message": "Scheduler paused", **scheduler.get_status()}
 
@@ -60,7 +60,7 @@ async def pause_auto_sync():
 @router.post("/scheduler/resume")
 async def resume_auto_sync():
     """Resume the auto-sync scheduler"""
-    scheduler = get_scheduler()
+    scheduler = SchedulerService
     scheduler.resume()
     return {"message": "Scheduler resumed", **scheduler.get_status()}
 
@@ -68,7 +68,7 @@ async def resume_auto_sync():
 @router.post("/scheduler/trigger")
 async def trigger_sync_now():
     """Manually trigger a sync immediately"""
-    scheduler = get_scheduler()
+    scheduler = SchedulerService
     result = await scheduler.trigger_sync_now()
     return result
 
@@ -78,8 +78,8 @@ async def update_sync_interval(
     interval_minutes: int = Query(..., ge=5, le=1440, description="New sync interval in minutes (5-1440)")
 ):
     """Update the sync interval"""
-    scheduler = get_scheduler()
-    scheduler.update_interval(interval_minutes)
+    scheduler = SchedulerService
+    await scheduler.update_interval(interval_minutes)
     return {"message": f"Interval updated to {interval_minutes} minutes", **scheduler.get_status()}
 
 
