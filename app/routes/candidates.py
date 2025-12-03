@@ -411,13 +411,25 @@ async def list_candidates(
 
 @router.get("/{candidate_id}", response_model=CandidateResponse)
 async def get_candidate(
-    candidate_id: int,
+    candidate_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get a single candidate by ID"""
-    result = await db.execute(
-        select(CandidateCache).where(CandidateCache.id == candidate_id)
-    )
+    """Get a single candidate by ID (supports both local ID and Zoho ID)"""
+    # Check if it's a Zoho ID (long numeric string) or local ID
+    if len(candidate_id) > 10 and candidate_id.isdigit():
+        # It's a Zoho ID
+        result = await db.execute(
+            select(CandidateCache).where(CandidateCache.zoho_id == candidate_id)
+        )
+    else:
+        # It's a local ID
+        try:
+            local_id = int(candidate_id)
+            result = await db.execute(
+                select(CandidateCache).where(CandidateCache.id == local_id)
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid candidate ID")
     candidate = result.scalar_one_or_none()
 
     if not candidate:
@@ -446,13 +458,23 @@ async def get_candidate(
 
 @router.get("/{candidate_id}/detail", response_model=CandidateDetailResponse)
 async def get_candidate_detail(
-    candidate_id: int,
+    candidate_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get full candidate detail with all fields and related data"""
-    result = await db.execute(
-        select(CandidateCache).where(CandidateCache.id == candidate_id)
-    )
+    """Get full candidate detail with all fields and related data (supports both local ID and Zoho ID)"""
+    # Check if it's a Zoho ID (long numeric string) or local ID
+    if len(candidate_id) > 10 and candidate_id.isdigit():
+        result = await db.execute(
+            select(CandidateCache).where(CandidateCache.zoho_id == candidate_id)
+        )
+    else:
+        try:
+            local_id = int(candidate_id)
+            result = await db.execute(
+                select(CandidateCache).where(CandidateCache.id == local_id)
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid candidate ID")
     candidate = result.scalar_one_or_none()
 
     if not candidate:
