@@ -175,15 +175,15 @@ class SchedulerService:
             
             result = None
             if category == 'candidates':
-                result = await SyncService.sync_candidates()
+                result = await SyncService.sync_candidates_from_zoho()
             elif category == 'interviews':
-                result = await SyncService.sync_interviews()
+                result = await SyncService.sync_interviews_from_zoho()
             elif category == 'tasks':
-                result = await SyncService.sync_tasks()
+                result = await SyncService.sync_tasks_from_zoho()
             elif category == 'notes':
-                result = await SyncService.sync_crm_notes(incremental=True)
+                result = await SyncService.sync_notes_from_zoho(full_sync=False)
             elif category == 'emails':
-                result = await SyncService.sync_emails(days_back=30)
+                result = await SyncService.sync_emails_from_zoho(days_back=30)
             
             cls._last_sync_result[category] = result
             cls._last_sync_error[category] = None

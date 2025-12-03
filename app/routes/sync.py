@@ -67,7 +67,7 @@ async def sync_candidates(
     limit: int = Query(None, description="Max records to sync")
 ):
     """Sync candidates from Zoho CRM"""
-    result = await SyncService.sync_candidates(limit=limit)
+    result = await SyncService.sync_candidates_from_zoho()
     return result
 
 
@@ -76,7 +76,7 @@ async def sync_interviews(
     limit: int = Query(500, description="Max records to sync")
 ):
     """Sync interviews from Zoho CRM"""
-    result = await SyncService.sync_interviews(limit=limit)
+    result = await SyncService.sync_interviews_from_zoho()
     return result
 
 
@@ -85,7 +85,7 @@ async def sync_tasks(
     limit: int = Query(500, description="Max records to sync")
 ):
     """Sync tasks from Zoho CRM"""
-    result = await SyncService.sync_tasks(limit=limit)
+    result = await SyncService.sync_tasks_from_zoho()
     return result
 
 
@@ -95,7 +95,7 @@ async def sync_notes(
     limit: int = Query(None, description="Max records to sync")
 ):
     """Sync notes from Zoho CRM"""
-    result = await SyncService.sync_crm_notes(incremental=incremental, limit=limit)
+    result = await SyncService.sync_notes_from_zoho(full_sync=not incremental)
     return result
 
 
@@ -105,7 +105,7 @@ async def sync_emails(
 ):
     """Sync emails from Zoho Mail"""
     try:
-        result = await SyncService.sync_emails(days_back=days_back)
+        result = await SyncService.sync_emails_from_zoho(days_back=days_back)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
