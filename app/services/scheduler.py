@@ -324,7 +324,7 @@ def get_scheduler() -> SchedulerService:
     return SchedulerService()
 
 
-async def start_scheduler(interval_minutes: int = 30, run_immediately: bool = True):
+async def start_scheduler(interval_minutes: int = None, run_immediately: bool = True):
     await SchedulerService.start(interval_minutes, run_immediately)
 
 
