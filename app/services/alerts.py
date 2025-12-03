@@ -141,7 +141,7 @@ class AlertsService:
                 "scheduled_date": interview.scheduled_date.isoformat() if interview.scheduled_date else None,
                 "days_since": days_since,
                 "no_show_count": interview.no_show_count,
-                "action_url": f"/candidates/{interview.candidate_id}" if interview.candidate_id else None,
+                "action_url": f"/candidates/{interview.zoho_candidate_id}" if interview.zoho_candidate_id else (f"/candidates/{interview.candidate_id}" if interview.candidate_id else None),
                 "action_label": "Follow Up"
             })
 
